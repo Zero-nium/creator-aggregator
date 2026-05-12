@@ -1,5 +1,16 @@
+# Backend
 __pycache__/
 *.pyc
 .env
 local.db
 *.db
+
+# Frontend
+node_modules/
+.next/
+dist/
+.env.local
+
+# IDE
+.vscode/
+.idea/
