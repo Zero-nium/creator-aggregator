@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Creator Aggregator",
-  description: "Agent-powered content trend dashboard",
+  description: "Agent-powered content trend intelligence",
 };
 
 export default function RootLayout({
