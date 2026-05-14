@@ -5,6 +5,7 @@ Stack: FastAPI + Turso (libSQL) + Fly.io
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
@@ -61,6 +62,16 @@ app = FastAPI(
     title="Agent Dashboard API",
     description="Ingestion and aggregation for content trend agents",
     version="0.1.0"
+)
+
+# --- Cors Middleware ---
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://creator-aggregator.vercel.app", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Database Client ---
