@@ -287,9 +287,9 @@ export default function Dashboard() {
   });
 
   // Extract unique filter options from raw data
-  const regions = [...new Set(rawData.map(r => r.payload?.region).filter(Boolean))];
-  const platforms = [...new Set(rawData.map(r => r.payload?.platform).filter(Boolean))];
-  const genres = [...new Set(rawData.map(r => r.payload?.genre).filter(Boolean))];
+  const regions = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
+  const platforms = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
+  const genres = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
 
   if (loading) {
     return (
