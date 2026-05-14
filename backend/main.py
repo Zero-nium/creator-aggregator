@@ -64,8 +64,7 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# --- Cors Middleware ---
-
+# CORS MUST be first middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -268,6 +267,10 @@ def get_report_by_date(report_date: str):
 def health_check():
     """Simple health check for Fly.io / monitoring"""
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return {}
 
 if __name__ == "__main__":
     import uvicorn
