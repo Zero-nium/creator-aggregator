@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -14,503 +14,367 @@ import {
   Cell,
 } from "recharts";
 
-// --- Types ---
-interface Metric {
-  label: string;
-  value: string;
-}
-
-interface Insight {
-  title: string;
-  description: string;
-  metrics: Metric[];
-  tags: string[];
-}
-
-interface Citation {
-  source: string;
-  context?: string;
-  url?: string;
-}
-
+/* ─── Types ─── */
 interface ReportMetadata {
   platform: string;
   region: string;
   niche: string;
   agentId?: string;
+  date: string;
 }
 
-interface DailyReport {
-  reportId: string;
-  date: string;
+interface Insight {
+  title: string;
+  description: string;
+  confidence: number;
+}
+
+interface Metric {
+  label: string;
+  value: number;
+  change: number;
+}
+
+interface Report {
   metadata: ReportMetadata;
   insights: Insight[];
-  citations: Citation[];
+  metrics: Metric[];
+  tags: Record<string, number>;
+  sources: string[];
 }
 
 interface RawPayload {
-  id: number;
+  id: string;
   agent_id: string;
   status: string;
-  received_at: string;
-  payload: any;
-  processed_at?: string;
-}
-
-// --- Constants ---
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://agent-dashboard-api-windblown-fog-6023.fly.dev";
-const CHART_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"];
-
-// --- Mock Data for Fallback ---
-const MOCK_REPORT: DailyReport = {
-  reportId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  date: "2026-05-12",
-  metadata: {
-    platform: "YouTube",
-    region: "APAC",
-    niche: "Health",
-    agentId: "Aura-YT-APAC-Health",
-  },
-  insights: [
-    {
-      title: "Content Authenticity & C2PA Rollout",
-      description: "YouTube has officially implemented support for C2PA v2.1 manifests. Videos verified as untampered capture now display a 'Captured with a camera' label.",
-      metrics: [{ label: "CTR Lift on Verified Content", value: "12%" }],
-      tags: ["Trust", "AI Policy", "Transparency"],
-    },
-    {
-      title: "APAC ROI & Performance Benchmarks",
-      description: "73% of influencer campaigns in APAC are now performance-driven (CPC/CPA). Micro and nano health creators are driving >40% of total campaign impact.",
-      metrics: [
-        { label: "Performance-Driven Campaigns", value: "73%" },
-        { label: "Micro-Influencer Impact", value: ">40%" },
-      ],
-      tags: ["ROI", "Performance Marketing", "Micro-Influencers"],
-    },
-  ],
-  citations: [
-    {
-      source: "YouTube Help / Content Credentials Technical Update",
-      context: "C2PA/Provenance",
-      url: "https://support.google.com/youtube/answer/14730417",
-    },
-    {
-      source: "AnyMind Group",
-      context: "State of Influence in APAC 2026",
-      url: "https://anymindgroup.com/news/report/state-of-influence-in-apac-2026/",
-    },
-  ],
-};
-
-const MOCK_RAW: RawPayload[] = [
-  {
-    id: 1,
-    agent_id: "Aura-YT-APAC-Health",
-    status: "processed",
-    received_at: "2026-05-12T10:16:23Z",
-    processed_at: "2026-05-12T10:29:39Z",
-    payload: { trend: "AI video editing", score: 85, region: "APAC", platform: "YouTube" },
-  },
-  {
-    id: 2,
-    agent_id: "Aura-IG-NA-Fashion",
-    status: "pending",
-    received_at: "2026-05-12T11:00:00Z",
-    payload: { trend: "Sustainable fashion", score: 72, region: "NA", platform: "Instagram" },
-  },
-];
-
-// --- Components ---
-
-function Badge({ children, color = "blue" }: { children: React.ReactNode; color?: string }) {
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700",
-    violet: "bg-violet-50 text-violet-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    slate: "bg-slate-100 text-slate-600",
+  payload: {
+    region?: string;
+    platform?: string;
+    genre?: string;
+    score?: number;
+    trend?: string;
+    [key: string]: any;
   };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorMap[color] || colorMap.blue}`}>
-      {children}
-    </span>
-  );
+  received_at: string;
 }
 
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-white rounded-lg shadow-sm border border-slate-200 ${className}`}>
-      {children}
-    </div>
-  );
-}
+/* ─── Constants ─── */
+const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#3b82f6"];
 
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="p-5">
-      <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-    </Card>
-  );
-}
-
-function InsightCard({ insight, index }: { insight: Insight; index: number }) {
-  return (
-    <Card className="p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-4">
-        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm">
-          {index + 1}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-slate-900">{insight.title}</h3>
-          <p className="mt-2 text-slate-600 text-sm leading-relaxed">{insight.description}</p>
-
-          {insight.metrics.length > 0 && (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {insight.metrics.map((metric, i) => (
-                <div key={i} className="bg-slate-50 rounded-md p-3">
-                  <p className="text-xs text-slate-500">{metric.label}</p>
-                  <p className="text-lg font-bold text-slate-900">{metric.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {insight.tags.map((tag, i) => (
-              <Badge key={i}>{tag}</Badge>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function CitationList({ citations }: { citations: Citation[] }) {
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">Sources & Citations</h3>
-      <div className="space-y-3">
-        {citations.map((cite, i) => (
-          <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 rounded-md">
-            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-              <span className="text-xs font-bold text-blue-600">{i + 1}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-slate-900 text-sm">{cite.source}</p>
-              {cite.context && <p className="text-xs text-slate-500 mt-0.5">{cite.context}</p>}
-              {cite.url && (
-                <a href={cite.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 mt-1 inline-block truncate max-w-full">
-                  {cite.url}
-                </a>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// --- Main Dashboard ---
-
-export default function Dashboard() {
+/* ─── Component ─── */
+export default function DashboardPage() {
   const [activeView, setActiveView] = useState<"global" | "specific">("global");
   const [activeTab, setActiveTab] = useState<"overview" | "insights" | "sources" | "raw">("overview");
-  const [report, setReport] = useState<DailyReport | null>(null);
+
+  const [report, setReport] = useState<Report | null>(null);
   const [rawData, setRawData] = useState<RawPayload[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters for Specific Trends
-  const [filterRegion, setFilterRegion] = useState<string>("all");
-  const [filterPlatform, setFilterPlatform] = useState<string>("all");
-  const [filterGenre, setFilterGenre] = useState<string>("all");
+  /* Filters */
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
 
+  /* ─── Fetch Data ─── */
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Use relative path — Vercel rewrite proxies to Fly.io
+        const reportRes = await fetch("/api/v1/reports/latest");
+        if (!reportRes.ok) throw new Error(`Report API ${reportRes.status}`);
+        const reportData: Report = await reportRes.json();
+
+        const rawRes = await fetch("/api/v1/agents/payloads");
+        if (!rawRes.ok) throw new Error(`Payloads API ${rawRes.status}`);
+        const rawDataRes: RawPayload[] = await rawRes.json();
+
+        if (!cancelled) {
+          setReport(reportData);
+          setRawData(rawDataRes);
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || "Failed to fetch data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     fetchData();
+    return () => { cancelled = true; };
   }, []);
 
-  async function fetchData() {
-    try {
-      setLoading(true);
+  /* ─── Derived Data ─── */
+  const tagChartData = useMemo(() => {
+    if (!report) return [];
+    return Object.entries(report.tags).map(([name, value]) => ({ name, value }));
+  }, [report]);
 
-      // Fetch latest report
-      const reportRes = await fetch(`${API_BASE}/api/v1/reports/latest`);
-      if (reportRes.ok) {
-        const reportData = await reportRes.json();
-        setReport(reportData);
-      } else {
-        setReport(MOCK_REPORT);
-        setError("Using sample data — no live reports found");
-      }
+  const filteredRaw = useMemo(() => {
+    return rawData.filter((item) => {
+      const p = item.payload || {};
+      if (regionFilter !== "all" && p.region !== regionFilter) return false;
+      if (platformFilter !== "all" && p.platform !== platformFilter) return false;
+      if (genreFilter !== "all" && p.genre !== genreFilter) return false;
+      return true;
+    });
+  }, [rawData, regionFilter, platformFilter, genreFilter]);
 
-      // Fetch raw payloads (we'll need to add this endpoint to backend)
-      // For now, use mock
-      setRawData(MOCK_RAW);
+  const regions = useMemo(() => Array.from(new Set(rawData.map((r) => r.payload?.region).filter(Boolean))), [rawData]);
+  const platforms = useMemo(() => Array.from(new Set(rawData.map((r) => r.payload?.platform).filter(Boolean))), [rawData]);
+  const genres = useMemo(() => Array.from(new Set(rawData.map((r) => r.payload?.genre).filter(Boolean))), [rawData]);
 
-    } catch (err) {
-      console.error("Failed to fetch:", err);
-      setReport(MOCK_REPORT);
-      setRawData(MOCK_RAW);
-      setError("API unavailable. Showing sample data.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Prepare chart data
-  const chartData = report?.insights.flatMap((insight) =>
-    insight.metrics.map((metric) => ({
-      name: metric.label.length > 20 ? metric.label.slice(0, 20) + "..." : metric.label,
-      value: parseFloat(metric.value.replace(/[^0-9.]/g, "")) || 0,
-      fullValue: metric.value,
-      insight: insight.title,
-    }))
-  ) || [];
-
-  const tagCounts = report?.insights.reduce((acc, insight) => {
-    insight.tags.forEach((tag) => { acc[tag] = (acc[tag] || 0) + 1; });
-    return acc;
-  }, {} as Record<string, number>);
-
-  const tagChartData = Object.entries(tagCounts || {}).map(([name, value]) => ({ name, value }));
-
-  // Filter raw data
-  const filteredRaw = rawData.filter((item) => {
-    const p = item.payload || {};
-    const regionMatch = filterRegion === "all" || p.region === filterRegion || !p.region;
-    const platformMatch = filterPlatform === "all" || p.platform === filterPlatform || !p.platform;
-    const genreMatch = filterGenre === "all" || p.genre === filterGenre || !p.genre;
-    return regionMatch && platformMatch && genreMatch;
-  });
-
-  // Extract unique filter options from raw data
-  const regions = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
-  const platforms = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
-  const genres = Array.from(new Set(rawData.map(r => r.payload?.region).filter(Boolean)));
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
+  /* ─── Render ─── */
   return (
-    <div className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Creator Aggregator</h1>
-                <p className="text-xs text-slate-500">Agent-Powered Trend Intelligence</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {error && (
-                <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
-                  {error}
-                </span>
-              )}
-              <button
-                onClick={fetchData}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </button>
-              {report && (
-                <span className="text-sm text-slate-500">{report.date}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Primary Navigation: Global vs Specific */}
-          <div className="flex gap-1 -mb-px">
-            <button
-              onClick={() => setActiveView("global")}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeView === "global"
-                  ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Global Trends
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveView("specific")}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeView === "specific"
-                  ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                Specific Trends
-              </span>
-            </button>
-          </div>
+      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur">
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          <h1 className="text-3xl font-bold tracking-tight text-white">
+            Creator Aggregator
+          </h1>
+          <p className="mt-1 text-slate-400">
+            Agent-Powered Trend Intelligence
+          </p>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-200">
+            <span className="font-semibold">API unavailable:</span> {error}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-20 text-slate-400">
+            <div className="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-slate-600 border-t-indigo-500" />
+            Loading dashboard data…
+          </div>
+        )}
+
+        {/* Report Date */}
+        {report && (
+          <div className="mb-4 text-sm text-slate-500">
+            Last updated: {new Date(report.metadata.date).toLocaleString()}
+          </div>
+        )}
+
+        {/* Primary Navigation */}
+        <div className="mb-6 flex gap-2">
+          {(["global", "specific"] as const).map((view) => (
+            <button
+              key={view}
+              onClick={() => setActiveView(view)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                activeView === view
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {view === "global" ? "Global Trends" : "Specific Trends"}
+            </button>
+          ))}
+        </div>
 
         {/* ==================== GLOBAL TRENDS ==================== */}
         {activeView === "global" && report && (
           <div className="space-y-6">
             {/* Metadata Banner */}
             <div className="flex flex-wrap gap-2">
-              <Badge color="blue">{report.metadata.platform}</Badge>
-              <Badge color="violet">{report.metadata.region}</Badge>
-              <Badge color="emerald">{report.metadata.niche}</Badge>
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+                {report.metadata.platform}
+              </span>
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+                {report.metadata.region}
+              </span>
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+                {report.metadata.niche}
+              </span>
               {report.metadata.agentId && (
-                <Badge color="slate">{report.metadata.agentId}</Badge>
+                <span className="rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300">
+                  Agent: {report.metadata.agentId}
+                </span>
               )}
             </div>
 
             {/* Secondary Tabs */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 border-b border-slate-800 pb-2">
               {(["overview", "insights", "sources", "raw"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
                     activeTab === tab
-                      ? "bg-slate-900 text-white"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      ? "text-indigo-400"
+                      : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab}
                 </button>
               ))}
             </div>
 
+            {/* Overview Tab */}
             {activeTab === "overview" && (
-              <div className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
                 {/* Key Metrics */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <MetricCard label="Platform" value={report.metadata.platform} />
-                  <MetricCard label="Region" value={report.metadata.region} />
-                  <MetricCard label="Niche" value={report.metadata.niche} />
-                  <MetricCard label="Insights" value={String(report.insights.length)} />
-                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-white">Key Metrics</h3>
+                  <div className="space-y-4">
+                    {report.metrics.map((m, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <span className="text-slate-400">{m.label}</span>
+                        <div className="text-right">
+                          <span className="text-xl font-bold text-white">{m.value}</span>
+                          <span
+                            className={`ml-2 text-sm ${
+                              m.change >= 0 ? "text-emerald-400" : "text-rose-400"
+                            }`}
+                          >
+                            {m.change >= 0 ? "+" : ""}
+                            {m.change}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-                {/* Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card className="p-6">
-                    <h3 className="text-base font-semibold text-slate-900 mb-4">Key Metrics</h3>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={70} />
-                        <YAxis />
+                  <div className="mt-6 h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={report.metrics}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <XAxis dataKey="label" stroke="#94a3b8" fontSize={12} />
+                        <YAxis stroke="#94a3b8" fontSize={12} />
                         <Tooltip
-                          contentStyle={{ backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12px" }}
-                          formatter={(value: number, name: string, props: any) => [props.payload.fullValue, props.payload.insight]}
+                          contentStyle={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid #1e293b",
+                            borderRadius: "8px",
+                          }}
                         />
-                        <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  </Card>
+                  </div>
+                </div>
 
-                  <Card className="p-6">
-                    <h3 className="text-base font-semibold text-slate-900 mb-4">Tag Distribution</h3>
-                    <ResponsiveContainer width="100%" height={220}>
+                {/* Tag Distribution */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-white">Tag Distribution</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={tagChartData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={50}
-                          outerRadius={70}
+                          innerRadius={60}
+                          outerRadius={100}
                           paddingAngle={4}
                           dataKey="value"
                         >
-                          {tagChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          {tagChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid #1e293b",
+                            borderRadius: "8px",
+                          }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="mt-2 flex flex-wrap gap-3 justify-center">
-                      {tagChartData.map((entry, index) => (
-                        <div key={entry.name} className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
-                          <span className="text-xs text-slate-600">{entry.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {tagChartData.map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1.5 text-sm text-slate-300">
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        {entry.name}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Quick Insights */}
-                <Card className="p-6">
-                  <h3 className="text-base font-semibold text-slate-900 mb-3">Latest Insights</h3>
-                  <div className="space-y-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 lg:col-span-2">
+                  <h3 className="mb-4 text-lg font-semibold text-white">Latest Insights</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
                     {report.insights.slice(0, 2).map((insight, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-bold text-blue-600">{i + 1}</span>
+                      <div
+                        key={i}
+                        className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-bold text-indigo-300">
+                            {i + 1}
+                          </span>
+                          <h4 className="font-semibold text-white">{insight.title}</h4>
                         </div>
-                        <div>
-                          <h4 className="font-medium text-slate-900 text-sm">{insight.title}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{insight.description}</p>
+                        <p className="text-sm text-slate-400">{insight.description}</p>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Confidence: {Math.round(insight.confidence * 100)}%
                         </div>
                       </div>
                     ))}
                   </div>
-                </Card>
+                </div>
               </div>
             )}
 
+            {/* Insights Tab */}
             {activeTab === "insights" && (
               <div className="space-y-4">
                 {report.insights.map((insight, i) => (
-                  <InsightCard key={i} insight={insight} index={i} />
+                  <div
+                    key={i}
+                    className="rounded-xl border border-slate-800 bg-slate-900/50 p-6"
+                  >
+                    <h4 className="text-lg font-semibold text-white">{insight.title}</h4>
+                    <p className="mt-2 text-slate-400">{insight.description}</p>
+                    <div className="mt-3 text-sm text-slate-500">
+                      Confidence: {Math.round(insight.confidence * 100)}%
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
 
-            {activeTab === "sources" && <CitationList citations={report.citations} />}
+            {/* Sources Tab */}
+            {activeTab === "sources" && (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+                <h3 className="mb-4 text-lg font-semibold text-white">Data Sources</h3>
+                <ul className="space-y-2">
+                  {report.sources.map((source, i) => (
+                    <li key={i} className="flex items-center gap-2 text-slate-300">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      {source}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
+            {/* Raw Tab */}
             {activeTab === "raw" && (
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-semibold text-slate-900">Raw Report Data</h3>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(JSON.stringify(report, null, 2))}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Copy JSON
-                  </button>
-                </div>
-                <pre className="bg-slate-900 text-slate-50 p-4 rounded-lg overflow-x-auto text-xs leading-relaxed">
-                  <code>{JSON.stringify(report, null, 2)}</code>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+                <h3 className="mb-4 text-lg font-semibold text-white">Raw Report Data</h3>
+                <pre className="overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-300">
+                  {JSON.stringify(report, null, 2)}
                 </pre>
-              </Card>
+              </div>
             )}
           </div>
         )}
@@ -519,106 +383,106 @@ export default function Dashboard() {
         {activeView === "specific" && (
           <div className="space-y-6">
             {/* Filters */}
-            <Card className="p-4">
-              <div className="flex flex-wrap gap-4 items-center">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-700">Region:</label>
-                  <select
-                    value={filterRegion}
-                    onChange={(e) => setFilterRegion(e.target.value)}
-                    className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-white"
-                  >
-                    <option value="all">All Regions</option>
-                    {regions.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-700">Platform:</label>
-                  <select
-                    value={filterPlatform}
-                    onChange={(e) => setFilterPlatform(e.target.value)}
-                    className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-white"
-                  >
-                    <option value="all">All Platforms</option>
-                    {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-700">Genre:</label>
-                  <select
-                    value={filterGenre}
-                    onChange={(e) => setFilterGenre(e.target.value)}
-                    className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-white"
-                  >
-                    <option value="all">All Genres</option>
-                    {genres.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div className="ml-auto text-sm text-slate-500">
-                  Showing {filteredRaw.length} of {rawData.length} entries
-                </div>
+            <div className="flex flex-wrap gap-4 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Region:</label>
+                <select
+                  value={regionFilter}
+                  onChange={(e) => setRegionFilter(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All</option>
+                  {regions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </Card>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Platform:</label>
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All</option>
+                  {platforms.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Genre:</label>
+                <select
+                  value={genreFilter}
+                  onChange={(e) => setGenreFilter(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All</option>
+                  {genres.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end text-sm text-slate-400">
+                Showing {filteredRaw.length} of {rawData.length} entries
+              </div>
+            </div>
 
             {/* Raw Data Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredRaw.map((item) => (
-                <Card key={item.id} className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="text-xs text-slate-500">Agent ID</p>
-                      <p className="text-sm font-semibold text-slate-900">{item.agent_id}</p>
-                    </div>
-                    <Badge color={item.status === "processed" ? "emerald" : "amber"}>
-                      {item.status}
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {item.payload?.region && (
-                        <div><span className="text-slate-500">Region:</span> <span className="font-medium">{item.payload.region}</span></div>
-                      )}
-                      {item.payload?.platform && (
-                        <div><span className="text-slate-500">Platform:</span> <span className="font-medium">{item.payload.platform}</span></div>
-                      )}
-                      {item.payload?.genre && (
-                        <div><span className="text-slate-500">Genre:</span> <span className="font-medium">{item.payload.genre}</span></div>
-                      )}
-                      {item.payload?.score && (
-                        <div><span className="text-slate-500">Score:</span> <span className="font-medium">{item.payload.score}</span></div>
-                      )}
-                    </div>
-
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 transition-colors hover:border-slate-700"
+                >
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {item.payload?.region && (
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                        Region: {item.payload.region}
+                      </span>
+                    )}
+                    {item.payload?.platform && (
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                        Platform: {item.payload.platform}
+                      </span>
+                    )}
+                    {item.payload?.genre && (
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                        Genre: {item.payload.genre}
+                      </span>
+                    )}
+                    {item.payload?.score && (
+                      <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-300">
+                        Score: {item.payload.score}
+                      </span>
+                    )}
                     {item.payload?.trend && (
-                      <div className="mt-2 p-2 bg-slate-50 rounded text-sm">
-                        <span className="text-slate-500">Trend:</span> <span className="font-medium text-slate-900">{item.payload.trend}</span>
-                      </div>
+                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                        Trend: {item.payload.trend}
+                      </span>
                     )}
                   </div>
-
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-400">
-                    <span>ID: {item.id}</span>
-                    <span>{new Date(item.received_at).toLocaleDateString()}</span>
+                  <div className="text-xs text-slate-500">
+                    ID: {item.id} · {new Date(item.received_at).toLocaleDateString()}
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
 
             {filteredRaw.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-slate-500">No data matches the selected filters.</p>
-                <button
-                  onClick={() => { setFilterRegion("all"); setFilterPlatform("all"); setFilterGenre("all"); }}
-                  className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Clear filters
-                </button>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-12 text-center text-slate-400">
+                No data matches the selected filters.
               </div>
             )}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
