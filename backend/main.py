@@ -1,70 +1,22 @@
-"""
-Agent Ingestion & Aggregation API
-Lightweight PoC for content trend dashboard
-Stack: FastAPI + Turso (libSQL) + Fly.io
-"""
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from datetime import datetime, date
-import uuid
-import json
-import libsql
+from typing import List, Optional
 import os
 
-# Environment variables (set these in Fly.io secrets)
-TURSO_URL = os.getenv("TURSO_DATABASE_URL", "file:local.db")
-TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
-
-# --- Pydantic Models ---
-
-class Metric(BaseModel):
-    label: str
-    value: str
-
-class Insight(BaseModel):
-    title: str
-    description: str
-    metrics: List[Metric] = []
-    tags: List[str] = []
-
-class Citation(BaseModel):
-    source: str
-    context: Optional[str] = None
-    url: Optional[str] = None
-
-class ReportMetadata(BaseModel):
-    platform: str
-    region: str
-    niche: str
-    agentId: Optional[str] = None
-
-class DailyReport(BaseModel):
-    reportId: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    date: str = Field(default_factory=lambda: str(date.today()))
-    metadata: ReportMetadata
-    insights: List[Insight]
-    citations: List[Citation]
-
-class RawPayload(BaseModel):
-    agent_id: str
-    payload: Dict[str, Any]
-
-class AggregationRequest(BaseModel):
-    raw_ids: List[int]
-    report: DailyReport
-
-# --- FastAPI App ---
+from models import (
+    AgentSignal, CreatorAlert, DeadlineItem, MarketOpportunity,
+    PatternDetection, HealthResponse
+)
+from database import db
 
 app = FastAPI(
-    title="Agent Dashboard API",
-    description="Ingestion and aggregation for content trend agents",
-    version="0.1.0"
+    title="Creator Aggregator API",
+    description="Ingest agent signals, serve creator alerts and market opportunities",
+    version="1.1.0"
 )
 
-# CORS MUST be first middleware
+# CORS for Vercel frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,205 +25,212 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Database Client ---
+API_KEY = os.getenv("API_KEY", "dev-key-change-me")
 
-def get_db():
-    """Get libSQL database client (synchronous)"""
-    if TURSO_AUTH_TOKEN and "libsql://" in TURSO_URL:
-        return libsql.connect(TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
-    return libsql.connect(TURSO_URL)
+# --- Health ---
+@app.get("/api/v1/health", response_model=HealthResponse)
+async def health_check():
+    return HealthResponse(
+        status="ok",
+        version="1.1.0",
+        database="sqlite-local",
+        signal_count=db.get_signal_count(),
+        last_ingestion=db.get_last_ingestion()
+    )
 
-def init_db():
-    """Create tables if they don't exist"""
-    db = get_db()
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS raw_payloads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent_id TEXT NOT NULL,
-            received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            payload TEXT NOT NULL,
-            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processed', 'failed')),
-            processed_at DATETIME,
-            error_message TEXT
+# --- Signal Ingestion ---
+@app.post("/api/v1/signals/ingest")
+async def ingest_signal(signal: AgentSignal, x_api_key: Optional[str] = Header(None)):
+    if x_api_key != API_KEY and API_KEY != "dev-key-change-me":
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    payload = signal.model_dump()
+    success = db.insert_signal(payload)
+    if not success:
+        raise HTTPException(status_code=500, detail="Database insert failed")
+    
+    return {"status": "ingested", "signal_id": signal.signal_id}
+
+@app.post("/api/v1/signals/batch")
+async def ingest_batch(signals: List[AgentSignal], x_api_key: Optional[str] = Header(None)):
+    if x_api_key != API_KEY and API_KEY != "dev-key-change-me":
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    ingested = []
+    failed = []
+    for signal in signals:
+        payload = signal.model_dump()
+        if db.insert_signal(payload):
+            ingested.append(signal.signal_id)
+        else:
+            failed.append(signal.signal_id)
+    
+    return {"ingested": ingested, "failed": failed, "count": len(ingested)}
+
+# --- Archive / Latest ---
+@app.get("/api/v1/archive/latest")
+async def get_latest_archive(limit: int = 50):
+    signals = db.get_signals(limit=limit)
+    return {"signals": signals, "count": len(signals)}
+
+# --- Creator Views ---
+@app.get("/api/v1/creator/alerts", response_model=List[CreatorAlert])
+async def get_creator_alerts(severity: Optional[str] = None, region: Optional[str] = None):
+    signals = db.get_signals(limit=100)
+    alerts = []
+    
+    for sig in signals:
+        for intel in sig.get("creator_intelligence", []):
+            sev = intel.get("severity", "low")
+            reg = intel.get("region", "")
+            
+            if severity and sev != severity:
+                continue
+            if region and region.lower() not in reg.lower():
+                continue
+            
+            alerts.append(CreatorAlert(
+                alert_id=f"{sig['signal_id']}_{reg}",
+                severity=sev,
+                region=reg,
+                headline=intel.get("headline", ""),
+                action=intel.get("creator_action", ""),
+                deadline=intel.get("deadline"),
+                content_formats=intel.get("content_format_at_risk", []),
+                sources=[s["name"] for s in intel.get("sources", [])]
+            ))
+    
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "observational": 4}
+    alerts.sort(key=lambda a: severity_order.get(a.severity, 99))
+    return alerts
+
+@app.get("/api/v1/creator/deadlines", response_model=List[DeadlineItem])
+async def get_deadlines():
+    signals = db.get_signals(limit=100)
+    deadlines = []
+    today = date.today()
+    
+    for sig in signals:
+        for intel in sig.get("creator_intelligence", []):
+            if intel.get("deadline"):
+                try:
+                    deadline_date = datetime.strptime(intel["deadline"], "%Y-%m-%d").date()
+                    days_remaining = (deadline_date - today).days
+                    
+                    deadlines.append(DeadlineItem(
+                        deadline_id=f"{sig['signal_id']}_{intel['region']}",
+                        date=intel["deadline"],
+                        region=intel["region"],
+                        headline=intel.get("headline", ""),
+                        action_required=intel.get("creator_action", ""),
+                        days_remaining=days_remaining,
+                        severity=intel.get("severity", "medium")
+                    ))
+                except:
+                    pass
+    
+    deadlines.sort(key=lambda d: d.days_remaining)
+    return deadlines
+
+# --- Market / Builder Views ---
+@app.get("/api/v1/market/opportunities", response_model=List[MarketOpportunity])
+async def get_opportunities():
+    signals = db.get_signals(limit=100)
+    opportunities = []
+    seen = set()
+    
+    for sig in signals:
+        market = sig.get("market_intelligence", {})
+        for consol in market.get("consolidation_signals", []):
+            key = consol.get("pattern", "")
+            if key not in seen:
+                seen.add(key)
+                opportunities.append(MarketOpportunity(
+                    opportunity_id=f"opp_{key.replace(' ', '_')}",
+                    pattern_name=consol.get("pattern", ""),
+                    regions_affected=consol.get("regions_affected", []),
+                    description=consol.get("description", ""),
+                    product_opportunity=consol.get("product_opportunity", ""),
+                    urgency=consol.get("urgency", "medium"),
+                    data_gaps=[],
+                    first_detected=consol.get("first_detected", sig.get("date", "")),
+                    trend_direction=consol.get("trend_direction", "stable")
+                ))
+        
+        for arb in market.get("arbitrage_signals", []):
+            key = arb.get("opportunity", "")
+            if key not in seen:
+                seen.add(key)
+                opportunities.append(MarketOpportunity(
+                    opportunity_id=f"arb_{key.replace(' ', '_')[:30]}",
+                    pattern_name=arb.get("description", "")[:50],
+                    regions_affected=arb.get("regions_affected", []),
+                    description=arb.get("description", ""),
+                    product_opportunity=arb.get("opportunity", ""),
+                    urgency="medium",
+                    data_gaps=[arb.get("data_gap")] if arb.get("data_gap") else [],
+                    first_detected=sig.get("date", ""),
+                    trend_direction="stable"
+                ))
+    
+    return opportunities
+
+@app.get("/api/v1/market/patterns", response_model=List[PatternDetection])
+async def get_patterns():
+    signals = db.get_signals(limit=100)
+    patterns = {}
+    
+    for sig in signals:
+        market = sig.get("market_intelligence", {})
+        for consol in market.get("consolidation_signals", []):
+            pat = consol.get("pattern", "")
+            if pat not in patterns:
+                patterns[pat] = {
+                    "regions": set(),
+                    "signals": [],
+                    "first_detected": consol.get("first_detected", sig.get("date", "")),
+                    "trend_direction": consol.get("trend_direction", "stable")
+                }
+            patterns[pat]["regions"].update(consol.get("regions_affected", []))
+            patterns[pat]["signals"].append(sig["signal_id"])
+    
+    return [
+        PatternDetection(
+            pattern_id=f"pat_{p.replace(' ', '_')}",
+            pattern=p,
+            regions=list(data["regions"]),
+            event_count=len(data["signals"]),
+            first_detected=data["first_detected"],
+            trend_direction=data["trend_direction"],
+            signals=data["signals"]
         )
-    """)
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS master_reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_id TEXT UNIQUE NOT NULL,
-            date TEXT NOT NULL,
-            metadata TEXT NOT NULL,
-            insights TEXT NOT NULL,
-            citations TEXT NOT NULL,
-            aggregated_from TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    db.execute("CREATE INDEX IF NOT EXISTS idx_reports_date ON master_reports(date)")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_raw_agent ON raw_payloads(agent_id, received_at)")
-    db.commit()
-    db.close()
-    print("Database initialized")
+        for p, data in patterns.items()
+    ]
 
-# --- Startup ---
-
-@app.on_event("startup")
-def startup():
-    init_db()
-
-# --- Endpoints ---
-
-@app.post("/api/v1/raw")
-def ingest_raw(data: RawPayload):
-    """Collector agents push raw data here. Returns payload_id for verification."""
-    db = get_db()
-    cursor = db.execute(
-        "INSERT INTO raw_payloads (agent_id, payload, status) VALUES (?, ?, 'pending')",
-        (data.agent_id, json.dumps(data.payload))
-    )
-    payload_id = cursor.lastrowid
-    db.commit()
-    db.close()
-
+# --- Stats ---
+@app.get("/api/v1/stats")
+async def get_stats():
+    signals = db.get_signals(limit=1000)
+    regions = set()
+    cohorts = set()
+    severities = {"critical": 0, "high": 0, "medium": 0, "low": 0, "observational": 0}
+    
+    for sig in signals:
+        cohorts.add(sig.get("cohort", "unknown"))
+        for intel in sig.get("creator_intelligence", []):
+            regions.add(intel.get("region", ""))
+            sev = intel.get("severity", "low")
+            severities[sev] = severities.get(sev, 0) + 1
+    
     return {
-        "received": True,
-        "payload_id": payload_id,
-        "status": "pending",
-        "agent_id": data.agent_id,
-        "timestamp": datetime.utcnow().isoformat()
+        "total_signals": len(signals),
+        "regions_covered": len(regions),
+        "cohorts": list(cohorts),
+        "severity_distribution": severities,
+        "last_ingestion": db.get_last_ingestion()
     }
 
-@app.get("/api/v1/raw/{payload_id}")
-def get_raw_status(payload_id: int):
-    """Agents verify their data was received and processed."""
-    db = get_db()
-    cursor = db.execute(
-        "SELECT id, agent_id, status, processed_at, error_message FROM raw_payloads WHERE id = ?",
-        (payload_id,)
-    )
-    row = cursor.fetchone()
-    db.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Payload not found")
-
-    return {
-        "id": row[0],
-        "agent_id": row[1],
-        "status": row[2],
-        "processed_at": row[3],
-        "error_message": row[4]
-    }
-
-@app.post("/api/v1/aggregate")
-def create_aggregate(request: AggregationRequest):
-    """Master Aggregator pushes normalized report here. Marks raw payloads as processed."""
-    db = get_db()
-    report = request.report
-
-    db.execute(
-        """
-        INSERT INTO master_reports (report_id, date, metadata, insights, citations, aggregated_from)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(report_id) DO UPDATE SET
-            metadata = excluded.metadata,
-            insights = excluded.insights,
-            citations = excluded.citations,
-            aggregated_from = excluded.aggregated_from,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            report.reportId,
-            report.date,
-            json.dumps(report.metadata.model_dump()),
-            json.dumps([i.model_dump() for i in report.insights]),
-            json.dumps([c.model_dump() for c in report.citations]),
-            json.dumps(request.raw_ids)
-        )
-    )
-
-    for raw_id in request.raw_ids:
-        db.execute(
-            "UPDATE raw_payloads SET status = 'processed', processed_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (raw_id,)
-        )
-
-    db.commit()
-    db.close()
-
-    return {
-        "aggregated": True,
-        "report_id": report.reportId,
-        "raw_ids_processed": len(request.raw_ids),
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-@app.get("/api/v1/reports/latest")
-def get_latest_report():
-    """Dashboard polls this endpoint for the most recent aggregate report."""
-    db = get_db()
-    cursor = db.execute(
-        """
-        SELECT report_id, date, metadata, insights, citations, created_at
-        FROM master_reports
-        ORDER BY created_at DESC
-        LIMIT 1
-        """
-    )
-    row = cursor.fetchone()
-    db.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="No reports found")
-
-    return {
-        "reportId": row[0],
-        "date": row[1],
-        "metadata": json.loads(row[2]),
-        "insights": json.loads(row[3]),
-        "citations": json.loads(row[4]),
-        "createdAt": row[5]
-    }
-
-@app.get("/api/v1/reports/{report_date}")
-def get_report_by_date(report_date: str):
-    """Get specific historical report by date."""
-    db = get_db()
-    cursor = db.execute(
-        """
-        SELECT report_id, date, metadata, insights, citations, created_at
-        FROM master_reports
-        WHERE date = ?
-        ORDER BY created_at DESC
-        LIMIT 1
-        """,
-        (report_date,)
-    )
-    row = cursor.fetchone()
-    db.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail=f"No report found for {report_date}")
-
-    return {
-        "reportId": row[0],
-        "date": row[1],
-        "metadata": json.loads(row[2]),
-        "insights": json.loads(row[3]),
-        "citations": json.loads(row[4]),
-        "createdAt": row[5]
-    }
-
-@app.get("/api/v1/health")
-def health_check():
-    """Simple health check for Fly.io / monitoring"""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
-
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return {}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+# --- Root redirect ---
+@app.get("/")
+async def root():
+    return {"message": "Creator Aggregator API v1.1.0", "docs": "/docs"}

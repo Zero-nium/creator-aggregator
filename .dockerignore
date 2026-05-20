@@ -1,7 +1,10 @@
-# flyctl launch added from .gitignore
-**/__pycache__
-**/*.pyc
-**/.env
-**/local.db
-**/*.db
-fly.toml
+__pycache__/
+*.pyc
+*.pyo
+*.sqlite3
+.env
+frontend/
+node_modules/
+.git/
+.gitignore
+README.md
