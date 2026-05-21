@@ -1,4 +1,4 @@
-database_py = r'''import json
+import json
 import os
 import sqlite3
 from datetime import datetime
@@ -188,10 +188,3 @@ class Database:
             print(f"[DB] Stats update error: {e}")
 
 db = Database()
-'''
-
-with open("/mnt/agents/output/database.py", "w") as f:
-    f.write(database_py)
-
-print("database.py written successfully")
-print(f"Length: {len(database_py)} chars")
