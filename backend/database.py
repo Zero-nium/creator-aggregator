@@ -15,12 +15,12 @@ class Database:
         self._client = None
         self._local_conn = None
         self._initialized = False
-
+    
     def _ensure_init(self):
         """Lazy init — safe to call from sync request handlers."""
         if self._initialized:
             return
-
+        
         if not _should_use_local():
             # Try Turso first
             try:
@@ -34,7 +34,7 @@ class Database:
                 return
             except Exception as e:
                 print(f"[DB] Turso connection failed: {e}. Falling back to local SQLite.")
-
+        
         # Fallback to local SQLite
         db_path = "/data/local.db" if os.path.exists("/data") else "local.db"
         self._local_conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -42,7 +42,7 @@ class Database:
         self._ensure_tables_sqlite()
         print(f"[DB] Using local SQLite: {db_path}")
         self._initialized = True
-
+    
     def _ensure_tables_turso(self):
         self._client.execute("""
             CREATE TABLE IF NOT EXISTS signals (
@@ -62,7 +62,7 @@ class Database:
             )
         """)
         self._client.commit()
-
+    
     def _ensure_tables_sqlite(self):
         c = self._local_conn.cursor()
         c.execute("""
@@ -83,11 +83,11 @@ class Database:
             )
         """)
         self._local_conn.commit()
-
+    
     def insert_signal(self, signal: Dict[str, Any]) -> bool:
         self._ensure_init()
         signal["submitted_at"] = datetime.utcnow().isoformat()
-
+        
         if self._client:
             try:
                 self._client.execute(
@@ -122,15 +122,16 @@ class Database:
             except Exception as e:
                 print(f"[DB] SQLite insert error: {e}")
                 return False
-
+    
     def get_signals(self, limit: int = 100) -> List[Dict[str, Any]]:
         self._ensure_init()
         if self._client:
             try:
-                rows = self._client.execute(
+                cursor = self._client.execute(
                     "SELECT payload FROM signals ORDER BY submitted_at DESC LIMIT ?",
                     (limit,)
                 )
+                rows = list(cursor)
                 return [json.loads(row[0]) for row in rows]
             except Exception as e:
                 print(f"[DB] Turso query error: {e}")
@@ -139,27 +140,29 @@ class Database:
             c = self._local_conn.cursor()
             c.execute("SELECT payload FROM signals ORDER BY submitted_at DESC LIMIT ?", (limit,))
             return [json.loads(r[0]) for r in c.fetchall()]
-
+    
     def get_signal_count(self) -> int:
         self._ensure_init()
         if self._client:
             try:
-                rows = self._client.execute("SELECT COUNT(*) FROM signals")
-                return rows[0][0]
+                cursor = self._client.execute("SELECT COUNT(*) FROM signals")
+                rows = list(cursor)
+                return rows[0][0] if rows else 0
             except:
                 return 0
         else:
             c = self._local_conn.cursor()
             c.execute("SELECT COUNT(*) FROM signals")
             return c.fetchone()[0]
-
+    
     def get_last_ingestion(self) -> Optional[str]:
         self._ensure_init()
         if self._client:
             try:
-                rows = self._client.execute(
+                cursor = self._client.execute(
                     "SELECT submitted_at FROM signals ORDER BY submitted_at DESC LIMIT 1"
                 )
+                rows = list(cursor)
                 return rows[0][0] if rows else None
             except:
                 return None
@@ -168,7 +171,7 @@ class Database:
             c.execute("SELECT submitted_at FROM signals ORDER BY submitted_at DESC LIMIT 1")
             r = c.fetchone()
             return r[0] if r else None
-
+    
     def _update_stats_turso(self):
         try:
             count = self.get_signal_count()
