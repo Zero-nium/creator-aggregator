@@ -1,4 +1,4 @@
-import json
+database_py = r'''import json
 import os
 import sqlite3
 from datetime import datetime
@@ -131,7 +131,7 @@ class Database:
                     "SELECT payload FROM signals ORDER BY submitted_at DESC LIMIT ?",
                     (limit,)
                 )
-                rows = list(cursor)
+                rows = cursor.fetchall()
                 return [json.loads(row[0]) for row in rows]
             except Exception as e:
                 print(f"[DB] Turso query error: {e}")
@@ -146,8 +146,8 @@ class Database:
         if self._client:
             try:
                 cursor = self._client.execute("SELECT COUNT(*) FROM signals")
-                rows = list(cursor)
-                return rows[0][0] if rows else 0
+                row = cursor.fetchone()
+                return row[0] if row else 0
             except:
                 return 0
         else:
@@ -162,8 +162,8 @@ class Database:
                 cursor = self._client.execute(
                     "SELECT submitted_at FROM signals ORDER BY submitted_at DESC LIMIT 1"
                 )
-                rows = list(cursor)
-                return rows[0][0] if rows else None
+                row = cursor.fetchone()
+                return row[0] if row else None
             except:
                 return None
         else:
@@ -188,3 +188,10 @@ class Database:
             print(f"[DB] Stats update error: {e}")
 
 db = Database()
+'''
+
+with open("/mnt/agents/output/database.py", "w") as f:
+    f.write(database_py)
+
+print("database.py written successfully")
+print(f"Length: {len(database_py)} chars")
