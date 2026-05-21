@@ -30,10 +30,12 @@ API_KEY = os.getenv("API_KEY", "dev-key-change-me")
 # --- Health ---
 @app.get("/api/v1/health", response_model=HealthResponse)
 async def health_check():
+    # Ensure db is initialised so we report correct database type
+    db.get_signal_count() # triggers _ensure_init()
     return HealthResponse(
         status="ok",
         version="1.1.0",
-        database="sqlite-local",
+        database="turso" if db._client else "sqlite-local",
         signal_count=db.get_signal_count(),
         last_ingestion=db.get_last_ingestion()
     )
