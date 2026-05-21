@@ -92,7 +92,7 @@ class Database:
             try:
                 self._client.execute(
                     "INSERT OR REPLACE INTO signals (signal_id, date, swarm_id, cohort, region_focus, payload, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    [
+                    (
                         signal["signal_id"],
                         signal.get("date", ""),
                         signal.get("swarm_id", ""),
@@ -100,7 +100,7 @@ class Database:
                         signal.get("region_focus", ""),
                         json.dumps(signal),
                         signal["submitted_at"]
-                    ]
+                    )
                 )
                 self._client.commit()
                 self._update_stats_turso()
@@ -129,7 +129,7 @@ class Database:
             try:
                 rows = self._client.execute(
                     "SELECT payload FROM signals ORDER BY submitted_at DESC LIMIT ?",
-                    [limit]
+                    (limit,)
                 )
                 return [json.loads(row[0]) for row in rows]
             except Exception as e:
@@ -174,11 +174,11 @@ class Database:
             count = self.get_signal_count()
             self._client.execute(
                 "INSERT OR REPLACE INTO stats (key, value) VALUES (?, ?)",
-                ["signal_count", str(count)]
+                ("signal_count", str(count))
             )
             self._client.execute(
                 "INSERT OR REPLACE INTO stats (key, value) VALUES (?, ?)",
-                ["last_ingestion", datetime.utcnow().isoformat()]
+                ("last_ingestion", datetime.utcnow().isoformat())
             )
             self._client.commit()
         except Exception as e:
