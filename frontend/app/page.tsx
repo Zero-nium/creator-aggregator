@@ -59,17 +59,6 @@ interface AgentSignal {
   submitted_at?: string;
 }
 
-interface CreatorAlert {
-  alert_id: string;
-  severity: string;
-  region: string;
-  headline: string;
-  action: string;
-  deadline?: string;
-  content_formats: string[];
-  sources: string[];
-}
-
 interface MarketOpportunity {
   opportunity_id: string;
   pattern_name: string;
@@ -96,26 +85,26 @@ const SIGNAL_TYPE_LABELS: Record<string, string> = {
 };
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
-  regulatory_enforcement: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-  platform_policy: "bg-violet-500/20 text-violet-300 border-violet-500/30",
-  compliance_deadline: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-  media_escalation: "bg-sky-500/20 text-sky-300 border-sky-500/30",
-  creator_sentiment: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-  baseline: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+  regulatory_enforcement: "bg-rose-100 text-rose-800 border-rose-200",
+  platform_policy: "bg-violet-100 text-violet-800 border-violet-200",
+  compliance_deadline: "bg-amber-100 text-amber-800 border-amber-200",
+  media_escalation: "bg-sky-100 text-sky-800 border-sky-200",
+  creator_sentiment: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  baseline: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: "bg-red-500/20 text-red-300 border-red-500/30",
-  high: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  medium: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  low: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  observational: "bg-slate-500/20 text-slate-400 border-slate-500/30",
+  critical: "bg-red-100 text-red-800 border-red-200",
+  high: "bg-orange-100 text-orange-800 border-orange-200",
+  medium: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  low: "bg-blue-100 text-blue-800 border-blue-200",
+  observational: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 const TREND_COLORS: Record<string, string> = {
-  strengthening: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-  stable: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-  weakening: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  strengthening: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  stable: "bg-slate-100 text-slate-700 border-slate-200",
+  weakening: "bg-amber-100 text-amber-800 border-amber-200",
 };
 
 const REGION_EMOJI: Record<string, string> = {
@@ -223,7 +212,7 @@ function CreatorCard({
   return (
     <button
       onClick={onClick}
-      className="group text-left w-full bg-slate-800/60 hover:bg-slate-800/90 border border-slate-700/50 hover:border-slate-600 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-slate-900/50 hover:-translate-y-0.5"
+      className="group text-left w-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-gray-200/50 hover:-translate-y-0.5"
     >
       {/* Top row: type badge + severity */}
       <div className="flex items-center justify-between mb-3">
@@ -234,29 +223,29 @@ function CreatorCard({
       </div>
 
       {/* Headline */}
-      <h3 className="text-sm font-bold text-slate-100 leading-snug mb-2 group-hover:text-white transition-colors">
+      <h3 className="text-sm font-bold text-gray-900 leading-snug mb-2 group-hover:text-black transition-colors">
         {intel.headline}
       </h3>
 
       {/* Description preview */}
-      <p className="text-xs text-slate-400 leading-relaxed mb-3">
+      <p className="text-xs text-gray-600 leading-relaxed mb-3">
         {truncate(intel.creator_action, 120)}
       </p>
 
       {/* Footer metadata */}
-      <div className="flex items-center justify-between text-[11px] text-slate-500">
+      <div className="flex items-center justify-between text-[11px] text-gray-500">
         <div className="flex items-center gap-2">
           {daysLeft !== null && daysLeft >= 0 && (
-            <span className="flex items-center gap-1 text-amber-400/80">
+            <span className="flex items-center gap-1 text-amber-700">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {daysLeft}d
             </span>
           )}
-          <span>{intel.region}</span>
+          <span className="text-gray-500">{intel.region}</span>
         </div>
-        <span>{age}</span>
+        <span className="text-gray-400">{age}</span>
       </div>
     </button>
   );
@@ -276,7 +265,7 @@ function BuilderCard({
   return (
     <button
       onClick={onClick}
-      className="group text-left w-full bg-slate-800/60 hover:bg-slate-800/90 border border-slate-700/50 hover:border-slate-600 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-slate-900/50 hover:-translate-y-0.5"
+      className="group text-left w-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-gray-200/50 hover:-translate-y-0.5"
     >
       {/* Top row: trend + urgency */}
       <div className="flex items-center justify-between mb-3">
@@ -285,17 +274,17 @@ function BuilderCard({
       </div>
 
       {/* Headline */}
-      <h3 className="text-sm font-bold text-slate-100 leading-snug mb-2 group-hover:text-white transition-colors">
+      <h3 className="text-sm font-bold text-gray-900 leading-snug mb-2 group-hover:text-black transition-colors">
         {opp.pattern_name}
       </h3>
 
       {/* Description preview */}
-      <p className="text-xs text-slate-400 leading-relaxed mb-3">
+      <p className="text-xs text-gray-600 leading-relaxed mb-3">
         {truncate(opp.product_opportunity, 120)}
       </p>
 
       {/* Footer metadata */}
-      <div className="flex items-center justify-between text-[11px] text-slate-500">
+      <div className="flex items-center justify-between text-[11px] text-gray-500">
         <div className="flex items-center gap-1">
           <span>🌍</span>
           <span>{opp.regions_affected.slice(0, 3).join(", ")}</span>
@@ -303,7 +292,7 @@ function BuilderCard({
             <span>+{opp.regions_affected.length - 3}</span>
           )}
         </div>
-        <span>{age}</span>
+        <span className="text-gray-400">{age}</span>
       </div>
     </button>
   );
@@ -321,18 +310,18 @@ function Modal({
   if (!isOpen) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl"
+        className="bg-white border border-gray-200 rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
           <div className="flex justify-end mb-2">
             <button
               onClick={onClose}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-gray-400 hover:text-gray-700 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -362,26 +351,26 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
         <Badge variant={sevColor}>{intel.severity}</Badge>
       </div>
 
-      <h2 className="text-lg font-bold text-white mb-3">{intel.headline}</h2>
+      <h2 className="text-lg font-bold text-gray-900 mb-3">{intel.headline}</h2>
 
-      <div className="space-y-4 text-sm text-slate-300">
+      <div className="space-y-4 text-sm text-gray-700">
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">What Changed</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">What Changed</h4>
           <p>{intel.what_changed}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Creator Risk</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Creator Risk</h4>
           <p>{intel.creator_risk}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Action Required</h4>
-          <p className="text-slate-200">{intel.creator_action}</p>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Required</h4>
+          <p className="text-gray-900">{intel.creator_action}</p>
         </div>
 
         {intel.deadline && (
-          <div className="flex items-center gap-2 text-amber-400">
+          <div className="flex items-center gap-2 text-amber-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -394,10 +383,10 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
 
         {intel.content_format_at_risk.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Formats at Risk</h4>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Formats at Risk</h4>
             <div className="flex flex-wrap gap-1.5">
               {intel.content_format_at_risk.map((f) => (
-                <span key={f} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-xs rounded">
+                <span key={f} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
                   {f.replace(/_/g, " ")}
                 </span>
               ))}
@@ -406,19 +395,19 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
         )}
 
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Sources</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Sources</h4>
           <div className="space-y-1">
             {intel.sources.map((s, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">{s.date_accessed}</span>
-                <span className="text-slate-300">{s.name}</span>
-                <span className="text-slate-600">({s.source_type})</span>
+                <span className="text-gray-400">{s.date_accessed}</span>
+                <span className="text-gray-700">{s.name}</span>
+                <span className="text-gray-400">({s.source_type})</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="pt-2 text-xs text-slate-600 border-t border-slate-800">
+        <div className="pt-2 text-xs text-gray-400 border-t border-gray-100">
           Signal: {signal.signal_id} · {signal.date}
         </div>
       </div>
@@ -437,24 +426,24 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
         <Badge variant={urgencyColor}>{opp.urgency}</Badge>
       </div>
 
-      <h2 className="text-lg font-bold text-white mb-3">{opp.pattern_name}</h2>
+      <h2 className="text-lg font-bold text-gray-900 mb-3">{opp.pattern_name}</h2>
 
-      <div className="space-y-4 text-sm text-slate-300">
+      <div className="space-y-4 text-sm text-gray-700">
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description</h4>
           <p>{opp.description}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Product Opportunity</h4>
-          <p className="text-slate-200">{opp.product_opportunity}</p>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Product Opportunity</h4>
+          <p className="text-gray-900">{opp.product_opportunity}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Regions Affected</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Regions Affected</h4>
           <div className="flex flex-wrap gap-1.5">
             {opp.regions_affected.map((r) => (
-              <span key={r} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-xs rounded">
+              <span key={r} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
                 {REGION_EMOJI[r] || "🌐"} {r}
               </span>
             ))}
@@ -463,8 +452,8 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
 
         {opp.data_gaps.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Data Gaps</h4>
-            <ul className="list-disc list-inside text-slate-400">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Data Gaps</h4>
+            <ul className="list-disc list-inside text-gray-600">
               {opp.data_gaps.map((g, i) => (
                 <li key={i}>{g}</li>
               ))}
@@ -472,7 +461,7 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
           </div>
         )}
 
-        <div className="pt-2 text-xs text-slate-600 border-t border-slate-800">
+        <div className="pt-2 text-xs text-gray-400 border-t border-gray-100">
           First detected: {opp.first_detected} · Events: {opp.event_count}
         </div>
       </div>
@@ -485,7 +474,6 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
 export default function HomePage() {
   const [view, setView] = useState<"creator" | "builder">("creator");
   const [signals, setSignals] = useState<AgentSignal[]>([]);
-  const [alerts, setAlerts] = useState<CreatorAlert[]>([]);
   const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -497,18 +485,15 @@ export default function HomePage() {
     async function fetchData() {
       try {
         setLoading(true);
-        const [signalsRes, alertsRes, oppRes] = await Promise.all([
+        const [signalsRes, oppRes] = await Promise.all([
           fetch(`${API_BASE}/api/v1/archive/latest?limit=100`),
-          fetch(`${API_BASE}/api/v1/creator/alerts`),
           fetch(`${API_BASE}/api/v1/market/opportunities`),
         ]);
 
         const signalsData = await signalsRes.json();
-        const alertsData = await alertsRes.json();
         const oppData = await oppRes.json();
 
         setSignals(signalsData.signals || []);
-        setAlerts(alertsData || []);
         setOpportunities(oppData || []);
       } catch (e) {
         setError("Failed to load data");
@@ -592,37 +577,37 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-slate-500 text-sm">Loading…</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500 text-sm">Loading…</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-red-400 text-sm">{error}</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-red-600 text-sm">{error}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Header */}
-      <header className="border-b border-slate-800/60">
+      <header className="border-b border-gray-200 bg-white">
         <div className="max-w-6xl mx-auto px-4 py-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Creator Aggregator</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Agent-Powered Trend Intelligence</p>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Creator Aggregator</h1>
+              <p className="text-xs text-gray-500 mt-0.5">Agent-Powered Trend Intelligence</p>
             </div>
-            <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-700/50 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-lg p-0.5">
               <button
                 onClick={() => setView("creator")}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   view === "creator"
-                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                    : "text-slate-500 hover:text-slate-300"
+                    ? "bg-white text-indigo-700 border border-indigo-200 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Creator
@@ -631,8 +616,8 @@ export default function HomePage() {
                 onClick={() => setView("builder")}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   view === "builder"
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                    : "text-slate-500 hover:text-slate-300"
+                    ? "bg-white text-emerald-700 border border-emerald-200 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Builder
@@ -642,30 +627,30 @@ export default function HomePage() {
 
           {/* Compact stats bar */}
           <div className="flex items-center gap-4 text-xs">
-            <span className="text-slate-300 font-semibold">{stats.total}</span>
-            <span className="text-slate-600">{view === "creator" ? "alerts" : "opportunities"}</span>
-            <span className="text-slate-700">·</span>
-            <span className="text-rose-400 font-medium">{stats.criticalHigh}</span>
-            <span className="text-slate-600">{view === "creator" ? "critical/high" : "high urgency"}</span>
-            <span className="text-slate-700">·</span>
-            <span className="text-amber-400 font-medium">{stats.withDeadline}</span>
-            <span className="text-slate-600">{view === "creator" ? "with deadlines" : "strengthening"}</span>
-            <span className="text-slate-700">·</span>
-            <span className="text-slate-400 font-medium">{stats.regions}</span>
-            <span className="text-slate-600">regions</span>
-            <span className="text-slate-700">·</span>
-            <span className="text-slate-600">last {archiveDays} days</span>
+            <span className="text-gray-900 font-semibold">{stats.total}</span>
+            <span className="text-gray-500">{view === "creator" ? "alerts" : "opportunities"}</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-red-600 font-medium">{stats.criticalHigh}</span>
+            <span className="text-gray-500">{view === "creator" ? "critical/high" : "high urgency"}</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-amber-600 font-medium">{stats.withDeadline}</span>
+            <span className="text-gray-500">{view === "creator" ? "with deadlines" : "strengthening"}</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-gray-700 font-medium">{stats.regions}</span>
+            <span className="text-gray-500">regions</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-gray-500">last {archiveDays} days</span>
           </div>
         </div>
       </header>
 
-      {/* Card Grid */}
+      {/* Card Grid — 3 columns fixed */}
       <main className="max-w-6xl mx-auto px-4 py-6">
         {view === "creator" ? (
           creatorCards.length === 0 ? (
-            <div className="text-center text-slate-600 text-sm py-20">No alerts in the last {archiveDays} days</div>
+            <div className="text-center text-gray-500 text-sm py-20">No alerts in the last {archiveDays} days</div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {creatorCards.map(({ intel, signal }, idx) => (
                 <CreatorCard
                   key={`${signal.signal_id}-${intel.region}-${idx}`}
@@ -677,9 +662,9 @@ export default function HomePage() {
             </div>
           )
         ) : builderCards.length === 0 ? (
-          <div className="text-center text-slate-600 text-sm py-20">No opportunities in the last {archiveDays} days</div>
+          <div className="text-center text-gray-500 text-sm py-20">No opportunities in the last {archiveDays} days</div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {builderCards.map((opp) => (
               <BuilderCard
                 key={opp.opportunity_id}
