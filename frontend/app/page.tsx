@@ -1,21 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 
 /* ═══════════════════════════════════════════════════════════════
-   TYPES — New Backend Schema (v1.1.0)
+   TYPES — Backend Schema v1.2.0
    ═══════════════════════════════════════════════════════════════ */
 
 interface SignalSource {
@@ -44,10 +32,10 @@ interface ConsolidationSignal {
   regions_affected: string[];
   description: string;
   product_opportunity: string;
-  urgency: string;
+  urgency: "critical" | "high" | "medium" | "low";
   first_detected: string;
   event_count: number;
-  trend_direction: string;
+  trend_direction: "strengthening" | "weakening" | "stable";
 }
 
 interface ArbitrageSignal {
@@ -75,44 +63,15 @@ interface AgentSignal {
   submitted_at: string;
 }
 
-interface AlertItem {
-  alert_id: string;
-  severity: string;
-  region: string;
-  headline: string;
-  action: string;
-  deadline?: string;
-  content_formats: string[];
-  sources: string[];
-}
-
-interface DeadlineItem {
-  deadline_id: string;
-  date: string;
-  region: string;
-  headline: string;
-  action_required: string;
-  days_remaining: number;
-  severity: string;
-}
-
-interface OpportunityItem {
-  opportunity_id: string;
-  pattern_name: string;
-  regions_affected: string[];
-  description: string;
-  product_opportunity: string;
-  urgency: string;
-  data_gaps: string[];
-  first_detected: string;
-  trend_direction: string;
-}
-
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
 
 const API_BASE = "https://agent-dashboard-api-windblown-fog-6023.fly.dev/api/v1";
+
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, observational: 4 };
+const TREND_ORDER = { strengthening: 0, stable: 1, weakening: 2 };
+const URGENCY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "#ef4444",
@@ -130,7 +89,11 @@ const SEVERITY_BG: Record<string, string> = {
   observational: "bg-slate-700 text-slate-300 border-slate-600",
 };
 
-const CHART_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#06b6d4"];
+const TREND_BG: Record<string, string> = {
+  strengthening: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+  stable: "bg-slate-700 text-slate-300 border-slate-600",
+  weakening: "bg-rose-500/10 text-rose-300 border-rose-500/30",
+};
 
 const REGION_EMOJI: Record<string, string> = {
   Australia: "🇦🇺",
@@ -139,6 +102,22 @@ const REGION_EMOJI: Record<string, string> = {
   "South Korea": "🇰🇷",
   India: "🇮🇳",
 };
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
+function daysUntil(dateStr: string): number {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function daysSince(dateStr: string): number {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return Math.ceil((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+}
 
 /* ═══════════════════════════════════════════════════════════════
    COMPONENT
@@ -153,17 +132,18 @@ export default function DashboardPage() {
   const [creatorTab, setCreatorTab] = useState<CreatorTab>("alerts");
   const [builderTab, setBuilderTab] = useState<BuilderTab>("opportunities");
 
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
-  const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
   const [signals, setSignals] = useState<AgentSignal[]>([]);
   const [stats, setStats] = useState<any>(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<string>("");
 
-  /* ─── Fetch all data ─── */
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState<any>(null);
+  const [modalType, setModalType] = useState<"alert" | "opportunity" | "pattern" | null>(null);
+
+  /* ─── Fetch data with archive filtering ─── */
   useEffect(() => {
     let cancelled = false;
 
@@ -172,18 +152,16 @@ export default function DashboardPage() {
         setLoading(true);
         setError(null);
 
-        const [alertsRes, deadlinesRes, oppRes, sigRes, statsRes] = await Promise.all([
-          fetch(`${API_BASE}/creator/alerts`),
-          fetch(`${API_BASE}/creator/deadlines`),
-          fetch(`${API_BASE}/market/opportunities`),
-          fetch(`${API_BASE}/archive/latest`),
+        // Creator: 7 days, Builder: 14 days
+        const creatorSince = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+        const builderSince = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+
+        const [sigRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE}/archive/latest?limit=200`),
           fetch(`${API_BASE}/stats`),
         ]);
 
         if (!cancelled) {
-          if (alertsRes.ok) setAlerts(await alertsRes.json());
-          if (deadlinesRes.ok) setDeadlines(await deadlinesRes.json());
-          if (oppRes.ok) setOpportunities(await oppRes.json());
           if (sigRes.ok) {
             const sigData = await sigRes.json();
             setSignals(sigData.signals || []);
@@ -203,23 +181,94 @@ export default function DashboardPage() {
   }, []);
 
   /* ─── Derived data ─── */
-  const severityCounts = useMemo(() => {
-    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, observational: 0 };
-    alerts.forEach((a) => { counts[a.severity] = (counts[a.severity] || 0) + 1; });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [alerts]);
+  const creatorSignals = useMemo(() => {
+    const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+    return signals.filter(s => s.date >= cutoff);
+  }, [signals]);
 
-  const regionCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    alerts.forEach((a) => { counts[a.region] = (counts[a.region] || 0) + 1; });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [alerts]);
+  const builderSignals = useMemo(() => {
+    const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+    return signals.filter(s => s.date >= cutoff);
+  }, [signals]);
 
-  const urgentDeadlines = useMemo(() => {
-    return deadlines.filter((d) => d.days_remaining <= 30).sort((a, b) => a.days_remaining - b.days_remaining);
-  }, [deadlines]);
+  // Creator: flatten intelligence into alert cards
+  const alertCards = useMemo(() => {
+    const cards: any[] = [];
+    creatorSignals.forEach(sig => {
+      sig.creator_intelligence.forEach((intel, idx) => {
+        const daysToDeadline = intel.deadline ? daysUntil(intel.deadline) : Infinity;
+        const age = daysSince(sig.date);
+        cards.push({
+          id: `${sig.signal_id}_${idx}`,
+          signal_id: sig.signal_id,
+          date: sig.date,
+          age,
+          ...intel,
+          daysToDeadline,
+          sortKey: [daysToDeadline === Infinity ? 999 : daysToDeadline, SEVERITY_ORDER[intel.severity], age],
+        });
+      });
+    });
+    return cards.sort((a, b) => {
+      for (let i = 0; i < a.sortKey.length; i++) {
+        if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+      }
+      return 0;
+    });
+  }, [creatorSignals]);
 
-  const criticalAlerts = useMemo(() => alerts.filter((a) => a.severity === "critical" || a.severity === "high"), [alerts]);
+  // Builder: flatten opportunities
+  const opportunityCards = useMemo(() => {
+    const cards: any[] = [];
+    builderSignals.forEach(sig => {
+      sig.market_intelligence.consolidation_signals.forEach((consol, idx) => {
+        cards.push({
+          id: `${sig.signal_id}_consol_${idx}`,
+          signal_id: sig.signal_id,
+          date: sig.date,
+          age: daysSince(sig.date),
+          ...consol,
+          sortKey: [TREND_ORDER[consol.trend_direction], URGENCY_ORDER[consol.urgency]],
+        });
+      });
+      sig.market_intelligence.arbitrage_signals.forEach((arb, idx) => {
+        cards.push({
+          id: `${sig.signal_id}_arb_${idx}`,
+          signal_id: sig.signal_id,
+          date: sig.date,
+          age: daysSince(sig.date),
+          ...arb,
+          isArbitrage: true,
+          sortKey: [2, 2], // arbitrage last
+        });
+      });
+    });
+    return cards.sort((a, b) => {
+      for (let i = 0; i < a.sortKey.length; i++) {
+        if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+      }
+      return 0;
+    });
+  }, [builderSignals]);
+
+  /* ─── Modal handlers ─── */
+  const openAlertModal = (card: any) => {
+    setModalContent(card);
+    setModalType("alert");
+    setModalOpen(true);
+  };
+
+  const openOpportunityModal = (card: any) => {
+    setModalContent(card);
+    setModalType("opportunity");
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalContent(null);
+    setModalType(null);
+  };
 
   /* ─── Render ─── */
   return (
@@ -279,67 +328,12 @@ export default function DashboardPage() {
         {/* ═══════ CREATOR VIEW ═══════ */}
         {viewMode === "creator" && !loading && (
           <div className="space-y-6">
-            {/* Critical banner */}
-            {criticalAlerts.length > 0 && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-                <div className="flex items-center gap-2 text-red-300 font-semibold">
-                  <span>⚠️</span>
-                  <span>{criticalAlerts.length} Critical Alert{criticalAlerts.length > 1 ? "s" : ""} Requiring Action</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {criticalAlerts.slice(0, 3).map((a) => (
-                    <span key={a.alert_id} className="rounded-full bg-red-500/20 px-3 py-1 text-xs text-red-200">
-                      {REGION_EMOJI[a.region] || "🌏"} {a.headline.slice(0, 50)}…
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Stats row */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Total Alerts" value={alerts.length} color="#6366f1" />
-              <StatCard label="Critical/High" value={criticalAlerts.length} color="#ef4444" />
-              <StatCard label="Upcoming Deadlines" value={urgentDeadlines.length} color="#f59e0b" />
-              <StatCard label="Regions Covered" value={stats?.regions_covered ?? 0} color="#10b981" />
-            </div>
-
-            {/* Charts */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-                <h3 className="mb-4 text-sm font-semibold text-white">Alerts by Severity</h3>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={severityCounts}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
-                      <YAxis stroke="#94a3b8" fontSize={10} />
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                        {severityCounts.map((entry, i) => (
-                          <Cell key={i} fill={SEVERITY_COLORS[entry.name] || CHART_COLORS[i]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-                <h3 className="mb-4 text-sm font-semibold text-white">Alerts by Region</h3>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={regionCounts} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name }) => name}>
-                        {regionCounts.map((_, i) => (
-                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              <StatCard label="Total Alerts" value={alertCards.length} color="#6366f1" />
+              <StatCard label="Critical/High" value={alertCards.filter(a => a.severity === "critical" || a.severity === "high").length} color="#ef4444" />
+              <StatCard label="With Deadlines" value={alertCards.filter(a => a.deadline).length} color="#f59e0b" />
+              <StatCard label="Regions Covered" value={new Set(alertCards.map(a => a.region)).size} color="#10b981" />
             </div>
 
             {/* Creator tabs */}
@@ -353,93 +347,83 @@ export default function DashboardPage() {
                   }`}
                 >
                   {tab}
-                  {tab === "alerts" && <span className="ml-1 text-xs text-slate-500">({alerts.length})</span>}
-                  {tab === "deadlines" && <span className="ml-1 text-xs text-slate-500">({deadlines.length})</span>}
-                  {tab === "signals" && <span className="ml-1 text-xs text-slate-500">({signals.length})</span>}
+                  {tab === "alerts" && <span className="ml-1 text-xs text-slate-500">({alertCards.length})</span>}
+                  {tab === "deadlines" && <span className="ml-1 text-xs text-slate-500">({alertCards.filter(a => a.deadline).length})</span>}
+                  {tab === "signals" && <span className="ml-1 text-xs text-slate-500">({creatorSignals.length})</span>}
                 </button>
               ))}
             </div>
 
-            {/* Alerts tab */}
+            {/* Alerts tab — CARD GRID */}
             {creatorTab === "alerts" && (
-              <div className="space-y-3">
-                {alerts.map((alert) => (
-                  <div key={alert.alert_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-                    <div className="flex flex-wrap items-start gap-3">
-                      <span className="text-2xl">{REGION_EMOJI[alert.region] || "🌏"}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium border ${SEVERITY_BG[alert.severity] || SEVERITY_BG.observational}`}>
-                            {alert.severity.toUpperCase()}
-                          </span>
-                          <span className="text-xs text-slate-500">{alert.region}</span>
-                        </div>
-                        <h3 className="mt-2 text-base font-semibold text-white">{alert.headline}</h3>
-                        <p className="mt-1 text-sm text-slate-400">{alert.action}</p>
-                        {alert.deadline && (
-                          <div className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
-                            <span>⏰</span> Deadline: {alert.deadline}
-                          </div>
-                        )}
-                        {alert.content_formats.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {alert.content_formats.map((f) => (
-                              <span key={f} className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{f.replace(/_/g, " ")}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {alertCards.map((card) => (
+                  <div
+                    key={card.id}
+                    onClick={() => openAlertModal(card)}
+                    className="cursor-pointer rounded-xl border border-slate-800 bg-slate-900/50 p-5 hover:border-slate-600 hover:bg-slate-800/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="text-2xl">{REGION_EMOJI[card.region] || "🌏"}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium border ${SEVERITY_BG[card.severity] || SEVERITY_BG.observational}`}>
+                        {card.severity.toUpperCase()}
+                      </span>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                      {alert.sources.map((s) => (
-                        <span key={s} className="rounded bg-slate-800 px-1.5 py-0.5">{s}</span>
+                    <h3 className="mt-3 text-sm font-semibold text-white line-clamp-2">{card.headline}</h3>
+                    <p className="mt-2 text-xs text-slate-400 line-clamp-3">{card.creator_action}</p>
+                    {card.deadline && (
+                      <div className={`mt-3 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
+                        card.daysToDeadline <= 7 ? "bg-red-500/10 text-red-300" : card.daysToDeadline <= 30 ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"
+                      }`}>
+                        ⏰ {card.daysToDeadline} days
+                      </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {card.content_format_at_risk.slice(0, 3).map((f: string) => (
+                        <span key={f} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{f.replace(/_/g, " ")}</span>
                       ))}
                     </div>
+                    <div className="mt-3 text-[10px] text-slate-600">{card.age}d ago · {card.region}</div>
                   </div>
                 ))}
-                {alerts.length === 0 && <EmptyState message="No alerts available." />}
+                {alertCards.length === 0 && <EmptyState message="No alerts in the last 7 days." />}
               </div>
             )}
 
             {/* Deadlines tab */}
             {creatorTab === "deadlines" && (
-              <div className="space-y-3">
-                {deadlines.map((d) => (
-                  <div key={d.deadline_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{REGION_EMOJI[d.region] || "🌏"}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium border ${SEVERITY_BG[d.severity] || SEVERITY_BG.medium}`}>
-                              {d.severity.toUpperCase()}
-                            </span>
-                            <span className="text-xs text-slate-500">{d.region}</span>
-                          </div>
-                          <h3 className="mt-1 text-base font-semibold text-white">{d.headline}</h3>
-                        </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {alertCards
+                  .filter((a) => a.deadline)
+                  .sort((a, b) => a.daysToDeadline - b.daysToDeadline)
+                  .map((card) => (
+                    <div
+                      key={card.id}
+                      onClick={() => openAlertModal(card)}
+                      className="cursor-pointer rounded-xl border border-slate-800 bg-slate-900/50 p-5 hover:border-slate-600 hover:bg-slate-800/50 transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl">{REGION_EMOJI[card.region] || "🌏"}</span>
+                        <span className={`text-2xl font-bold ${card.daysToDeadline <= 7 ? "text-red-400" : card.daysToDeadline <= 30 ? "text-amber-400" : "text-emerald-400"}`}>
+                          {card.daysToDeadline}
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <div className={`text-2xl font-bold ${d.days_remaining <= 7 ? "text-red-400" : d.days_remaining <= 30 ? "text-amber-400" : "text-emerald-400"}`}>
-                          {d.days_remaining}
-                        </div>
-                        <div className="text-xs text-slate-500">days left</div>
+                      <div className="mt-1 text-right text-xs text-slate-500">days left</div>
+                      <h3 className="mt-3 text-sm font-semibold text-white line-clamp-2">{card.headline}</h3>
+                      <div className="mt-3 rounded-lg bg-slate-800/50 p-2 text-xs text-slate-300 line-clamp-3">
+                        {card.creator_action}
                       </div>
+                      <div className="mt-3 text-[10px] text-slate-600">Due: {card.deadline}</div>
                     </div>
-                    <div className="mt-3 rounded-lg bg-slate-800/50 p-3 text-sm text-slate-300">
-                      <span className="font-medium text-white">Action:</span> {d.action_required}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500">Due: {d.date}</div>
-                  </div>
-                ))}
-                {deadlines.length === 0 && <EmptyState message="No upcoming deadlines." />}
+                  ))}
+                {alertCards.filter((a) => a.deadline).length === 0 && <EmptyState message="No upcoming deadlines." />}
               </div>
             )}
 
             {/* Signals tab (raw) */}
             {creatorTab === "signals" && (
               <div className="space-y-3">
-                {signals.map((sig) => (
+                {creatorSignals.map((sig) => (
                   <div key={sig.signal_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-300">
@@ -464,7 +448,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-                {signals.length === 0 && <EmptyState message="No signals in archive." />}
+                {creatorSignals.length === 0 && <EmptyState message="No signals in the last 7 days." />}
               </div>
             )}
           </div>
@@ -473,12 +457,12 @@ export default function DashboardPage() {
         {/* ═══════ BUILDER VIEW ═══════ */}
         {viewMode === "builder" && !loading && (
           <div className="space-y-6">
-            {/* Opportunity stats */}
+            {/* Stats row */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Opportunities" value={opportunities.length} color="#10b981" />
-              <StatCard label="Consolidation Patterns" value={opportunities.filter((o) => o.opportunity_id.startsWith("opp_")).length} color="#6366f1" />
-              <StatCard label="Arbitrage Signals" value={opportunities.filter((o) => o.opportunity_id.startsWith("arb_")).length} color="#f59e0b" />
-              <StatCard label="Markets Affected" value={new Set(opportunities.flatMap((o) => o.regions_affected)).size} color="#ec4899" />
+              <StatCard label="Opportunities" value={opportunityCards.length} color="#10b981" />
+              <StatCard label="Consolidation" value={opportunityCards.filter(o => !o.isArbitrage).length} color="#6366f1" />
+              <StatCard label="Arbitrage" value={opportunityCards.filter(o => o.isArbitrage).length} color="#f59e0b" />
+              <StatCard label="Markets" value={new Set(opportunityCards.flatMap(o => o.regions_affected)).size} color="#ec4899" />
             </div>
 
             {/* Builder tabs */}
@@ -492,60 +476,64 @@ export default function DashboardPage() {
                   }`}
                 >
                   {tab}
-                  {tab === "opportunities" && <span className="ml-1 text-xs text-slate-500">({opportunities.length})</span>}
-                  {tab === "signals" && <span className="ml-1 text-xs text-slate-500">({signals.length})</span>}
+                  {tab === "opportunities" && <span className="ml-1 text-xs text-slate-500">({opportunityCards.length})</span>}
+                  {tab === "signals" && <span className="ml-1 text-xs text-slate-500">({builderSignals.length})</span>}
                 </button>
               ))}
             </div>
 
-            {/* Opportunities tab */}
+            {/* Opportunities tab — CARD GRID */}
             {builderTab === "opportunities" && (
-              <div className="space-y-3">
-                {opportunities.map((opp) => (
-                  <div key={opp.opportunity_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-                    <div className="flex flex-wrap items-start gap-3">
-                      <span className="text-2xl">{opp.opportunity_id.startsWith("opp_") ? "🔥" : "💡"}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium border ${SEVERITY_BG[opp.urgency] || SEVERITY_BG.medium}`}>
-                            {opp.urgency.toUpperCase()}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            {opp.regions_affected.map((r) => REGION_EMOJI[r] || "🌏").join(" ")}
-                          </span>
-                          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
-                            {opp.trend_direction}
-                          </span>
-                        </div>
-                        <h3 className="mt-2 text-base font-semibold text-white">{opp.pattern_name}</h3>
-                        <p className="mt-1 text-sm text-slate-400">{opp.description}</p>
-                        <div className="mt-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
-                          <div className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Product Opportunity</div>
-                          <div className="mt-1 text-sm text-emerald-200">{opp.product_opportunity}</div>
-                        </div>
-                        {opp.data_gaps.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            <span className="text-xs text-slate-500">Data gaps:</span>
-                            {opp.data_gaps.map((g, i) => (
-                              <span key={i} className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{g}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {opportunityCards.map((card) => (
+                  <div
+                    key={card.id}
+                    onClick={() => openOpportunityModal(card)}
+                    className="cursor-pointer rounded-xl border border-slate-800 bg-slate-900/50 p-5 hover:border-slate-600 hover:bg-slate-800/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="text-2xl">{card.isArbitrage ? "💡" : "🔥"}</span>
+                      {!card.isArbitrage && (
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium border ${TREND_BG[card.trend_direction] || TREND_BG.stable}`}>
+                          {card.trend_direction}
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-3 text-xs text-slate-600">First detected: {opp.first_detected}</div>
+                    <h3 className="mt-3 text-sm font-semibold text-white line-clamp-2">
+                      {card.isArbitrage ? card.opportunity : card.pattern}
+                    </h3>
+                    <p className="mt-2 text-xs text-slate-400 line-clamp-3">
+                      {card.description}
+                    </p>
+                    {!card.isArbitrage && (
+                      <div className="mt-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
+                        <div className="text-[10px] font-medium text-emerald-400 uppercase tracking-wider">Product Opportunity</div>
+                        <div className="mt-1 text-xs text-emerald-200 line-clamp-2">{card.product_opportunity}</div>
+                      </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {card.regions_affected.slice(0, 3).map((r: string) => (
+                        <span key={r} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                          {REGION_EMOJI[r] || "🌏"} {r}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-600">{card.age}d ago · {card.event_count || 1} events</div>
                   </div>
                 ))}
-                {opportunities.length === 0 && <EmptyState message="No market opportunities detected yet." />}
+                {opportunityCards.length === 0 && <EmptyState message="No opportunities in the last 14 days." />}
               </div>
             )}
 
             {/* Patterns tab */}
             {builderTab === "patterns" && (
-              <div className="space-y-3">
-                {signals.map((sig) =>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {builderSignals.flatMap((sig) =>
                   sig.market_intelligence.consolidation_signals.map((consol, i) => (
-                    <div key={`${sig.signal_id}_${i}`} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+                    <div
+                      key={`${sig.signal_id}_${i}`}
+                      className="rounded-xl border border-slate-800 bg-slate-900/50 p-5"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-xl">🔥</span>
                         <span className="text-xs font-mono text-slate-500">{consol.pattern}</span>
@@ -572,7 +560,7 @@ export default function DashboardPage() {
                     </div>
                   ))
                 )}
-                {signals.flatMap((s) => s.market_intelligence.consolidation_signals).length === 0 && (
+                {builderSignals.flatMap((s) => s.market_intelligence.consolidation_signals).length === 0 && (
                   <EmptyState message="No consolidation patterns detected yet." />
                 )}
               </div>
@@ -581,7 +569,7 @@ export default function DashboardPage() {
             {/* Signals tab (raw) */}
             {builderTab === "signals" && (
               <div className="space-y-3">
-                {signals.map((sig) => (
+                {builderSignals.map((sig) => (
                   <div key={sig.signal_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
@@ -601,12 +589,152 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-                {signals.length === 0 && <EmptyState message="No signals in archive." />}
+                {builderSignals.length === 0 && <EmptyState message="No signals in the last 14 days." />}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+         MODAL
+         ═══════════════════════════════════════════════════════════════ */}
+      {modalOpen && modalContent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
+          <div
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{REGION_EMOJI[modalContent.region || modalContent.regions_affected?.[0]] || "🌏"}</span>
+                <div>
+                  {modalType === "alert" && (
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium border ${SEVERITY_BG[modalContent.severity]}`}>
+                      {modalContent.severity?.toUpperCase()}
+                    </span>
+                  )}
+                  {modalType === "opportunity" && !modalContent.isArbitrage && (
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium border ${TREND_BG[modalContent.trend_direction]}`}>
+                      {modalContent.trend_direction}
+                    </span>
+                  )}
+                  <div className="mt-1 text-xs text-slate-500">
+                    {modalContent.region || modalContent.regions_affected?.join(", ")} · {modalContent.date}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={closeModal}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <h2 className="mt-4 text-xl font-bold text-white">{modalContent.headline || modalContent.pattern || modalContent.opportunity}</h2>
+
+            {modalType === "alert" && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">What Changed</div>
+                  <p className="mt-1 text-sm text-slate-300">{modalContent.what_changed}</p>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Creator Risk</div>
+                  <p className="mt-1 text-sm text-red-300">{modalContent.creator_risk}</p>
+                </div>
+                <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-4">
+                  <div className="text-xs font-medium text-indigo-400 uppercase tracking-wider">Action Required</div>
+                  <p className="mt-1 text-sm text-indigo-200">{modalContent.creator_action}</p>
+                </div>
+                {modalContent.deadline && (
+                  <div className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium ${
+                    modalContent.daysToDeadline <= 7 ? "bg-red-500/10 text-red-300" : "bg-amber-500/10 text-amber-300"
+                  }`}>
+                    ⏰ Deadline: {modalContent.deadline} ({modalContent.daysToDeadline} days remaining)
+                  </div>
+                )}
+                {modalContent.content_format_at_risk?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Formats at Risk</div>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {modalContent.content_format_at_risk.map((f: string) => (
+                        <span key={f} className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{f.replace(/_/g, " ")}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Sources</div>
+                  <div className="mt-1 space-y-1">
+                    {modalContent.sources?.map((s: SignalSource, i: number) => (
+                      <div key={i} className="text-sm text-slate-400">
+                        {s.name} · {s.source_type} · {s.date_accessed}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {modalType === "opportunity" && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Description</div>
+                  <p className="mt-1 text-sm text-slate-300">{modalContent.description}</p>
+                </div>
+                {!modalContent.isArbitrage && (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-4">
+                    <div className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Product Opportunity</div>
+                    <p className="mt-1 text-sm text-emerald-200">{modalContent.product_opportunity}</p>
+                  </div>
+                )}
+                {modalContent.isArbitrage && (
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4">
+                    <div className="text-xs font-medium text-amber-400 uppercase tracking-wider">Arbitrage Opportunity</div>
+                    <p className="mt-1 text-sm text-amber-200">{modalContent.opportunity}</p>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Regions Affected</div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {modalContent.regions_affected?.map((r: string) => (
+                      <span key={r} className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                        {REGION_EMOJI[r] || "🌏"} {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {modalContent.data_gap && (
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Data Gap</div>
+                    <p className="mt-1 text-sm text-slate-400">{modalContent.data_gap}</p>
+                  </div>
+                )}
+                {!modalContent.isArbitrage && (
+                  <div className="flex gap-4 text-xs text-slate-500">
+                    <span>{modalContent.event_count} events</span>
+                    <span>First detected: {modalContent.first_detected}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal footer */}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={closeModal}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

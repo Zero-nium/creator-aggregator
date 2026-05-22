@@ -13,9 +13,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy ALL backend Python files into container
-COPY backend/models.py .
-COPY backend/database.py .
-COPY backend/main.py .
+COPY backend/ .
 
 EXPOSE 8080
 
