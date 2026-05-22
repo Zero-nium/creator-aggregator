@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-// ─── Types (match existing API responses, no new expectations) ───
+// ─── Types ───
 
 interface SignalSource {
   name: string;
@@ -84,29 +84,6 @@ const SIGNAL_TYPE_LABELS: Record<string, string> = {
   baseline: "BASELINE",
 };
 
-const SIGNAL_TYPE_COLORS: Record<string, string> = {
-  regulatory_enforcement: "bg-rose-100 text-rose-800 border-rose-200",
-  platform_policy: "bg-violet-100 text-violet-800 border-violet-200",
-  compliance_deadline: "bg-amber-100 text-amber-800 border-amber-200",
-  media_escalation: "bg-sky-100 text-sky-800 border-sky-200",
-  creator_sentiment: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  baseline: "bg-slate-100 text-slate-700 border-slate-200",
-};
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: "bg-red-100 text-red-800 border-red-200",
-  high: "bg-orange-100 text-orange-800 border-orange-200",
-  medium: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  low: "bg-blue-100 text-blue-800 border-blue-200",
-  observational: "bg-slate-100 text-slate-600 border-slate-200",
-};
-
-const TREND_COLORS: Record<string, string> = {
-  strengthening: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  stable: "bg-slate-100 text-slate-700 border-slate-200",
-  weakening: "bg-amber-100 text-amber-800 border-amber-200",
-};
-
 const REGION_EMOJI: Record<string, string> = {
   Australia: "🇦🇺",
   Japan: "🇯🇵",
@@ -121,24 +98,15 @@ const REGION_EMOJI: Record<string, string> = {
 };
 
 const SEVERITY_ORDER: Record<string, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  observational: 4,
+  critical: 0, high: 1, medium: 2, low: 3, observational: 4,
 };
 
 const URGENCY_ORDER: Record<string, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
+  critical: 0, high: 1, medium: 2, low: 3,
 };
 
 const TREND_ORDER: Record<string, number> = {
-  strengthening: 0,
-  stable: 1,
-  weakening: 2,
+  strengthening: 0, stable: 1, weakening: 2,
 };
 
 // ─── Helpers ───
@@ -150,9 +118,7 @@ function daysUntil(dateStr?: string): number | null {
     const now = new Date();
     const diff = d.getTime() - now.getTime();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function daysAgo(dateStr?: string): string {
@@ -165,9 +131,7 @@ function daysAgo(dateStr?: string): string {
     if (days === 0) return "Today";
     if (days === 1) return "Yesterday";
     return `${days}d ago`;
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 }
 
 function truncate(str: string, len: number): string {
@@ -175,155 +139,211 @@ function truncate(str: string, len: number): string {
   return str.slice(0, len).trim() + "…";
 }
 
-// ─── Components ───
+// ─── Styles (inline to bypass Tailwind compilation issues) ───
 
-function Badge({
-  children,
-  variant,
-}: {
-  children: React.ReactNode;
-  variant: string;
-}) {
+const styles: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", backgroundColor: "#f9fafb", color: "#111827", fontFamily: 'system-ui, -apple-system, sans-serif' },
+  header: { borderBottom: "1px solid #e5e7eb", backgroundColor: "#ffffff" },
+  headerInner: { maxWidth: "1152px", margin: "0 auto", padding: "20px 16px" },
+  headerTop: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" },
+  title: { fontSize: "20px", fontWeight: 700, color: "#111827", letterSpacing: "-0.025em", margin: 0, lineHeight: 1.2 },
+  subtitle: { fontSize: "12px", color: "#6b7280", marginTop: "4px", margin: 0 },
+  toggleWrap: { display: "flex", alignItems: "center", gap: "2px", backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "2px" },
+  toggleBtn: { padding: "6px 12px", fontSize: "12px", fontWeight: 500, borderRadius: "6px", border: "none", cursor: "pointer", transition: "all 0.15s" },
+  toggleBtnActiveCreator: { backgroundColor: "#ffffff", color: "#4338ca", border: "1px solid #c7d2fe", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" },
+  toggleBtnActiveBuilder: { backgroundColor: "#ffffff", color: "#047857", border: "1px solid #a7f3d0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" },
+  toggleBtnInactive: { backgroundColor: "transparent", color: "#6b7280" },
+  statsBar: { display: "flex", alignItems: "center", gap: "12px", fontSize: "12px" },
+  statsNum: { fontWeight: 600, color: "#111827" },
+  statsLabel: { color: "#6b7280" },
+  statsDot: { color: "#d1d5db" },
+  statsAccentRed: { fontWeight: 500, color: "#dc2626" },
+  statsAccentAmber: { fontWeight: 500, color: "#d97706" },
+  statsAccentGray: { fontWeight: 500, color: "#374151" },
+  main: { maxWidth: "1152px", margin: "0 auto", padding: "24px 16px" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" },
+  grid2col: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" },
+  grid1col: { display: "grid", gridTemplateColumns: "1fr", gap: "16px" },
+  emptyState: { textAlign: "center", color: "#6b7280", fontSize: "14px", padding: "80px 0" },
+  loading: { minHeight: "100vh", backgroundColor: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", color: "#6b7280", fontSize: "14px" },
+  error: { minHeight: "100vh", backgroundColor: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", fontSize: "14px" },
+};
+
+// ─── Badge Component ───
+
+function Badge({ children, bg, text, border }: { children: React.ReactNode; bg: string; text: string; border: string }) {
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded border ${variant}`}
-    >
+    <span style={{
+      display: "inline-flex", alignItems: "center", padding: "2px 8px",
+      fontSize: "10px", fontWeight: 600, letterSpacing: "0.05em",
+      textTransform: "uppercase", borderRadius: "4px", border: `1px solid ${border}`,
+      backgroundColor: bg, color: text,
+    }}>
       {children}
     </span>
   );
 }
 
-function CreatorCard({
-  intel,
-  signal,
-  onClick,
-}: {
-  intel: CreatorIntel;
-  signal: AgentSignal;
-  onClick: () => void;
-}) {
+// ─── Creator Card ───
+
+function CreatorCard({ intel, signal, onClick }: { intel: CreatorIntel; signal: AgentSignal; onClick: () => void }) {
   const daysLeft = daysUntil(intel.deadline);
   const age = daysAgo(signal.date || signal.submitted_at);
   const regionEmoji = REGION_EMOJI[intel.region] || "🌐";
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
-  const typeColor = SIGNAL_TYPE_COLORS[intel.signal_type] || SIGNAL_TYPE_COLORS.baseline;
-  const sevColor = SEVERITY_COLORS[intel.severity] || SEVERITY_COLORS.observational;
+
+  const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
+    regulatory_enforcement: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    platform_policy: { bg: "#ede9fe", text: "#5b21b6", border: "#ddd6fe" },
+    compliance_deadline: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+    media_escalation: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
+    creator_sentiment: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    baseline: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+  };
+
+  const sevStyles: Record<string, { bg: string; text: string; border: string }> = {
+    critical: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    high: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    medium: { bg: "#fef9c3", text: "#854d0e", border: "#fde047" },
+    low: { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" },
+    observational: { bg: "#f3f4f6", text: "#4b5563", border: "#e5e7eb" },
+  };
+
+  const ts = typeStyles[intel.signal_type] || typeStyles.baseline;
+  const ss = sevStyles[intel.severity] || sevStyles.observational;
 
   return (
     <button
       onClick={onClick}
-      className="group text-left w-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-gray-200/50 hover:-translate-y-0.5"
+      style={{
+        textAlign: "left", width: "100%", backgroundColor: "#ffffff",
+        border: "1px solid #e5e7eb", borderRadius: "12px", padding: "16px",
+        cursor: "pointer", transition: "all 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "#d1d5db";
+        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "#e5e7eb";
+        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
     >
-      {/* Top row: type badge + severity */}
-      <div className="flex items-center justify-between mb-3">
-        <Badge variant={typeColor}>
-          {regionEmoji} {typeLabel}
-        </Badge>
-        <Badge variant={sevColor}>{intel.severity}</Badge>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <Badge bg={ts.bg} text={ts.text} border={ts.border}>{regionEmoji} {typeLabel}</Badge>
+        <Badge bg={ss.bg} text={ss.text} border={ss.border}>{intel.severity}</Badge>
       </div>
 
-      {/* Headline */}
-      <h3 className="text-sm font-bold text-gray-900 leading-snug mb-2 group-hover:text-black transition-colors">
+      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#111827", lineHeight: 1.4, marginBottom: "8px" }}>
         {intel.headline}
       </h3>
 
-      {/* Description preview */}
-      <p className="text-xs text-gray-600 leading-relaxed mb-3">
+      <p style={{ fontSize: "12px", color: "#4b5563", lineHeight: 1.5, marginBottom: "12px" }}>
         {truncate(intel.creator_action, 120)}
       </p>
 
-      {/* Footer metadata */}
-      <div className="flex items-center justify-between text-[11px] text-gray-500">
-        <div className="flex items-center gap-2">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "11px", color: "#6b7280" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {daysLeft !== null && daysLeft >= 0 && (
-            <span className="flex items-center gap-1 text-amber-700">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "#b45309" }}>
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {daysLeft}d
             </span>
           )}
-          <span className="text-gray-500">{intel.region}</span>
+          <span>{intel.region}</span>
         </div>
-        <span className="text-gray-400">{age}</span>
+        <span style={{ color: "#9ca3af" }}>{age}</span>
       </div>
     </button>
   );
 }
 
-function BuilderCard({
-  opp,
-  onClick,
-}: {
-  opp: MarketOpportunity;
-  onClick: () => void;
-}) {
+// ─── Builder Card ───
+
+function BuilderCard({ opp, onClick }: { opp: MarketOpportunity; onClick: () => void }) {
   const age = daysAgo(opp.first_detected);
-  const trendColor = TREND_COLORS[opp.trend_direction] || TREND_COLORS.stable;
-  const urgencyColor = SEVERITY_COLORS[opp.urgency] || SEVERITY_COLORS.low;
+
+  const trendStyles: Record<string, { bg: string; text: string; border: string }> = {
+    strengthening: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    stable: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+    weakening: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+  };
+
+  const urgencyStyles: Record<string, { bg: string; text: string; border: string }> = {
+    critical: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    high: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    medium: { bg: "#fef9c3", text: "#854d0e", border: "#fde047" },
+    low: { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" },
+  };
+
+  const ts = trendStyles[opp.trend_direction] || trendStyles.stable;
+  const us = urgencyStyles[opp.urgency] || urgencyStyles.low;
 
   return (
     <button
       onClick={onClick}
-      className="group text-left w-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-gray-200/50 hover:-translate-y-0.5"
+      style={{
+        textAlign: "left", width: "100%", backgroundColor: "#ffffff",
+        border: "1px solid #e5e7eb", borderRadius: "12px", padding: "16px",
+        cursor: "pointer", transition: "all 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "#d1d5db";
+        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "#e5e7eb";
+        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
     >
-      {/* Top row: trend + urgency */}
-      <div className="flex items-center justify-between mb-3">
-        <Badge variant={trendColor}>📈 {opp.trend_direction}</Badge>
-        <Badge variant={urgencyColor}>{opp.urgency}</Badge>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <Badge bg={ts.bg} text={ts.text} border={ts.border}>📈 {opp.trend_direction}</Badge>
+        <Badge bg={us.bg} text={us.text} border={us.border}>{opp.urgency}</Badge>
       </div>
 
-      {/* Headline */}
-      <h3 className="text-sm font-bold text-gray-900 leading-snug mb-2 group-hover:text-black transition-colors">
+      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#111827", lineHeight: 1.4, marginBottom: "8px" }}>
         {opp.pattern_name}
       </h3>
 
-      {/* Description preview */}
-      <p className="text-xs text-gray-600 leading-relaxed mb-3">
+      <p style={{ fontSize: "12px", color: "#4b5563", lineHeight: 1.5, marginBottom: "12px" }}>
         {truncate(opp.product_opportunity, 120)}
       </p>
 
-      {/* Footer metadata */}
-      <div className="flex items-center justify-between text-[11px] text-gray-500">
-        <div className="flex items-center gap-1">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "11px", color: "#6b7280" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <span>🌍</span>
           <span>{opp.regions_affected.slice(0, 3).join(", ")}</span>
-          {opp.regions_affected.length > 3 && (
-            <span>+{opp.regions_affected.length - 3}</span>
-          )}
+          {opp.regions_affected.length > 3 && <span>+{opp.regions_affected.length - 3}</span>}
         </div>
-        <span className="text-gray-400">{age}</span>
+        <span style={{ color: "#9ca3af" }}>{age}</span>
       </div>
     </button>
   );
 }
 
-function Modal({
-  isOpen,
-  onClose,
-  children,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
+// ─── Modal ───
+
+function Modal({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) {
   if (!isOpen) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backgroundColor: "rgba(0,0,0,0.5)" }}
       onClick={onClose}
     >
       <div
-        className="bg-white border border-gray-200 rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl"
+        style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "16px", maxWidth: "512px", width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 25px 50px rgba(0,0,0,0.15)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
-          <div className="flex justify-end mb-2">
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div style={{ padding: "24px" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+            <button onClick={onClose} style={{ color: "#9ca3af", background: "none", border: "none", cursor: "pointer" }}>
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -335,58 +355,75 @@ function Modal({
   );
 }
 
+// ─── Creator Modal ───
+
 function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSignal }) {
   const daysLeft = daysUntil(intel.deadline);
   const regionEmoji = REGION_EMOJI[intel.region] || "🌐";
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
-  const typeColor = SIGNAL_TYPE_COLORS[intel.signal_type] || SIGNAL_TYPE_COLORS.baseline;
-  const sevColor = SEVERITY_COLORS[intel.severity] || SEVERITY_COLORS.observational;
+
+  const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
+    regulatory_enforcement: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    platform_policy: { bg: "#ede9fe", text: "#5b21b6", border: "#ddd6fe" },
+    compliance_deadline: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+    media_escalation: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
+    creator_sentiment: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    baseline: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+  };
+
+  const sevStyles: Record<string, { bg: string; text: string; border: string }> = {
+    critical: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    high: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    medium: { bg: "#fef9c3", text: "#854d0e", border: "#fde047" },
+    low: { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" },
+    observational: { bg: "#f3f4f6", text: "#4b5563", border: "#e5e7eb" },
+  };
+
+  const ts = typeStyles[intel.signal_type] || typeStyles.baseline;
+  const ss = sevStyles[intel.severity] || sevStyles.observational;
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <Badge variant={typeColor}>
-          {regionEmoji} {typeLabel}
-        </Badge>
-        <Badge variant={sevColor}>{intel.severity}</Badge>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+        <Badge bg={ts.bg} text={ts.text} border={ts.border}>{regionEmoji} {typeLabel}</Badge>
+        <Badge bg={ss.bg} text={ss.text} border={ss.border}>{intel.severity}</Badge>
       </div>
 
-      <h2 className="text-lg font-bold text-gray-900 mb-3">{intel.headline}</h2>
+      <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#111827", marginBottom: "12px" }}>{intel.headline}</h2>
 
-      <div className="space-y-4 text-sm text-gray-700">
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#374151" }}>
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">What Changed</h4>
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>What Changed</h4>
           <p>{intel.what_changed}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Creator Risk</h4>
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Creator Risk</h4>
           <p>{intel.creator_risk}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Required</h4>
-          <p className="text-gray-900">{intel.creator_action}</p>
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Action Required</h4>
+          <p style={{ color: "#111827" }}>{intel.creator_action}</p>
         </div>
 
         {intel.deadline && (
-          <div className="flex items-center gap-2 text-amber-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#b45309" }}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-semibold">
-              Deadline: {intel.deadline}
-              {daysLeft !== null && ` (${daysLeft} days remaining)`}
+            <span style={{ fontWeight: 600 }}>
+              Deadline: {intel.deadline}{daysLeft !== null && ` (${daysLeft} days remaining)`}
             </span>
           </div>
         )}
 
         {intel.content_format_at_risk.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Formats at Risk</h4>
-            <div className="flex flex-wrap gap-1.5">
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Formats at Risk</h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {intel.content_format_at_risk.map((f) => (
-                <span key={f} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                <span key={f} style={{ padding: "2px 8px", backgroundColor: "#f3f4f6", color: "#4b5563", fontSize: "12px", borderRadius: "4px" }}>
                   {f.replace(/_/g, " ")}
                 </span>
               ))}
@@ -395,19 +432,19 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
         )}
 
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Sources</h4>
-          <div className="space-y-1">
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Sources</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             {intel.sources.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="text-gray-400">{s.date_accessed}</span>
-                <span className="text-gray-700">{s.name}</span>
-                <span className="text-gray-400">({s.source_type})</span>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
+                <span style={{ color: "#9ca3af" }}>{s.date_accessed}</span>
+                <span style={{ color: "#374151" }}>{s.name}</span>
+                <span style={{ color: "#9ca3af" }}>({s.source_type})</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="pt-2 text-xs text-gray-400 border-t border-gray-100">
+        <div style={{ paddingTop: "8px", fontSize: "12px", color: "#9ca3af", borderTop: "1px solid #f3f4f6" }}>
           Signal: {signal.signal_id} · {signal.date}
         </div>
       </div>
@@ -415,35 +452,50 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
   );
 }
 
+// ─── Builder Modal ───
+
 function BuilderModal({ opp }: { opp: MarketOpportunity }) {
-  const trendColor = TREND_COLORS[opp.trend_direction] || TREND_COLORS.stable;
-  const urgencyColor = SEVERITY_COLORS[opp.urgency] || SEVERITY_COLORS.low;
+  const trendStyles: Record<string, { bg: string; text: string; border: string }> = {
+    strengthening: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    stable: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+    weakening: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+  };
+
+  const urgencyStyles: Record<string, { bg: string; text: string; border: string }> = {
+    critical: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
+    high: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    medium: { bg: "#fef9c3", text: "#854d0e", border: "#fde047" },
+    low: { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" },
+  };
+
+  const ts = trendStyles[opp.trend_direction] || trendStyles.stable;
+  const us = urgencyStyles[opp.urgency] || urgencyStyles.low;
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <Badge variant={trendColor}>📈 {opp.trend_direction}</Badge>
-        <Badge variant={urgencyColor}>{opp.urgency}</Badge>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+        <Badge bg={ts.bg} text={ts.text} border={ts.border}>📈 {opp.trend_direction}</Badge>
+        <Badge bg={us.bg} text={us.text} border={us.border}>{opp.urgency}</Badge>
       </div>
 
-      <h2 className="text-lg font-bold text-gray-900 mb-3">{opp.pattern_name}</h2>
+      <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#111827", marginBottom: "12px" }}>{opp.pattern_name}</h2>
 
-      <div className="space-y-4 text-sm text-gray-700">
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#374151" }}>
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description</h4>
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Description</h4>
           <p>{opp.description}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Product Opportunity</h4>
-          <p className="text-gray-900">{opp.product_opportunity}</p>
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Product Opportunity</h4>
+          <p style={{ color: "#111827" }}>{opp.product_opportunity}</p>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Regions Affected</h4>
-          <div className="flex flex-wrap gap-1.5">
+          <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Regions Affected</h4>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {opp.regions_affected.map((r) => (
-              <span key={r} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+              <span key={r} style={{ padding: "2px 8px", backgroundColor: "#f3f4f6", color: "#4b5563", fontSize: "12px", borderRadius: "4px" }}>
                 {REGION_EMOJI[r] || "🌐"} {r}
               </span>
             ))}
@@ -452,16 +504,14 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
 
         {opp.data_gaps.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Data Gaps</h4>
-            <ul className="list-disc list-inside text-gray-600">
-              {opp.data_gaps.map((g, i) => (
-                <li key={i}>{g}</li>
-              ))}
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Data Gaps</h4>
+            <ul style={{ listStyle: "disc", paddingLeft: "16px", color: "#4b5563" }}>
+              {opp.data_gaps.map((g, i) => <li key={i}>{g}</li>)}
             </ul>
           </div>
         )}
 
-        <div className="pt-2 text-xs text-gray-400 border-t border-gray-100">
+        <div style={{ paddingTop: "8px", fontSize: "12px", color: "#9ca3af", borderTop: "1px solid #f3f4f6" }}>
           First detected: {opp.first_detected} · Events: {opp.event_count}
         </div>
       </div>
@@ -480,7 +530,6 @@ export default function HomePage() {
   const [selectedCreator, setSelectedCreator] = useState<{ intel: CreatorIntel; signal: AgentSignal } | null>(null);
   const [selectedBuilder, setSelectedBuilder] = useState<MarketOpportunity | null>(null);
 
-  // Fetch all data on mount
   useEffect(() => {
     async function fetchData() {
       try {
@@ -505,7 +554,6 @@ export default function HomePage() {
     fetchData();
   }, []);
 
-  // Archive filtering (client-side, no backend changes)
   const archiveDays = view === "creator" ? 7 : 14;
   const cutoffDate = useMemo(() => {
     const d = new Date();
@@ -513,30 +561,23 @@ export default function HomePage() {
     return d;
   }, [archiveDays]);
 
-  // ─── Creator cards: flatten signals → creator_intelligence[] ───
   const creatorCards = useMemo(() => {
     const cards: { intel: CreatorIntel; signal: AgentSignal; sortKey: number }[] = [];
-
     for (const signal of signals) {
       const signalDate = new Date(signal.date || signal.submitted_at || "1970-01-01");
       if (signalDate < cutoffDate) continue;
-
       for (const intel of signal.creator_intelligence || []) {
         const daysLeft = daysUntil(intel.deadline) ?? 999;
         const sev = SEVERITY_ORDER[intel.severity] ?? 99;
         const age = Math.floor((Date.now() - signalDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        // Sort: Deadline → Severity → Age
         const sortKey = daysLeft * 10000 + sev * 100 + age;
         cards.push({ intel, signal, sortKey });
       }
     }
-
     cards.sort((a, b) => a.sortKey - b.sortKey);
     return cards;
   }, [signals, cutoffDate]);
 
-  // ─── Builder cards: use opportunities endpoint ───
   const builderCards = useMemo(() => {
     return opportunities
       .filter((opp) => {
@@ -548,26 +589,20 @@ export default function HomePage() {
         const trendB = TREND_ORDER[b.trend_direction] ?? 99;
         const urgA = URGENCY_ORDER[a.urgency] ?? 99;
         const urgB = URGENCY_ORDER[b.urgency] ?? 99;
-        // Sort: Trend → Urgency
         return trendA - trendB || urgA - urgB;
       });
   }, [opportunities, cutoffDate]);
 
-  // Stats
   const stats = useMemo(() => {
     if (view === "creator") {
       const total = creatorCards.length;
-      const criticalHigh = creatorCards.filter(
-        (c) => c.intel.severity === "critical" || c.intel.severity === "high"
-      ).length;
+      const criticalHigh = creatorCards.filter((c) => c.intel.severity === "critical" || c.intel.severity === "high").length;
       const withDeadline = creatorCards.filter((c) => c.intel.deadline).length;
       const regions = new Set(creatorCards.map((c) => c.intel.region)).size;
       return { total, criticalHigh, withDeadline, regions };
     } else {
       const total = builderCards.length;
-      const highUrgency = builderCards.filter(
-        (o) => o.urgency === "critical" || o.urgency === "high"
-      ).length;
+      const highUrgency = builderCards.filter((o) => o.urgency === "critical" || o.urgency === "high").length;
       const strengthening = builderCards.filter((o) => o.trend_direction === "strengthening").length;
       const allRegions = new Set<string>();
       builderCards.forEach((o) => o.regions_affected.forEach((r) => allRegions.add(r)));
@@ -575,103 +610,87 @@ export default function HomePage() {
     }
   }, [creatorCards, builderCards, view]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading…</div>
-      </div>
-    );
-  }
+  if (loading) return <div style={styles.loading}>Loading…</div>;
+  if (error) return <div style={styles.error}>{error}</div>;
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-red-600 text-sm">{error}</div>
-      </div>
-    );
-  }
+  const cards = view === "creator" ? creatorCards : builderCards;
+  const isEmpty = cards.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div style={styles.page}>
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto px-4 py-5">
-          <div className="flex items-center justify-between mb-4">
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
+          <div style={styles.headerTop}>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Creator Aggregator</h1>
-              <p className="text-xs text-gray-500 mt-0.5">Agent-Powered Trend Intelligence</p>
+              <h1 style={styles.title}>Creator Aggregator</h1>
+              <p style={styles.subtitle}>Agent-Powered Trend Intelligence</p>
             </div>
-            <div className="flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-lg p-0.5">
+            <div style={styles.toggleWrap}>
               <button
                 onClick={() => setView("creator")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  view === "creator"
-                    ? "bg-white text-indigo-700 border border-indigo-200 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
+                style={{
+                  ...styles.toggleBtn,
+                  ...(view === "creator" ? styles.toggleBtnActiveCreator : styles.toggleBtnInactive),
+                }}
               >
                 Creator
               </button>
               <button
                 onClick={() => setView("builder")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  view === "builder"
-                    ? "bg-white text-emerald-700 border border-emerald-200 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
+                style={{
+                  ...styles.toggleBtn,
+                  ...(view === "builder" ? styles.toggleBtnActiveBuilder : styles.toggleBtnInactive),
+                }}
               >
                 Builder
               </button>
             </div>
           </div>
 
-          {/* Compact stats bar */}
-          <div className="flex items-center gap-4 text-xs">
-            <span className="text-gray-900 font-semibold">{stats.total}</span>
-            <span className="text-gray-500">{view === "creator" ? "alerts" : "opportunities"}</span>
-            <span className="text-gray-300">·</span>
-            <span className="text-red-600 font-medium">{stats.criticalHigh}</span>
-            <span className="text-gray-500">{view === "creator" ? "critical/high" : "high urgency"}</span>
-            <span className="text-gray-300">·</span>
-            <span className="text-amber-600 font-medium">{stats.withDeadline}</span>
-            <span className="text-gray-500">{view === "creator" ? "with deadlines" : "strengthening"}</span>
-            <span className="text-gray-300">·</span>
-            <span className="text-gray-700 font-medium">{stats.regions}</span>
-            <span className="text-gray-500">regions</span>
-            <span className="text-gray-300">·</span>
-            <span className="text-gray-500">last {archiveDays} days</span>
+          {/* Stats bar */}
+          <div style={styles.statsBar}>
+            <span style={styles.statsNum}>{stats.total}</span>
+            <span style={styles.statsLabel}>{view === "creator" ? "alerts" : "opportunities"}</span>
+            <span style={styles.statsDot}>·</span>
+            <span style={styles.statsAccentRed}>{stats.criticalHigh}</span>
+            <span style={styles.statsLabel}>{view === "creator" ? "critical/high" : "high urgency"}</span>
+            <span style={styles.statsDot}>·</span>
+            <span style={styles.statsAccentAmber}>{stats.withDeadline}</span>
+            <span style={styles.statsLabel}>{view === "creator" ? "with deadlines" : "strengthening"}</span>
+            <span style={styles.statsDot}>·</span>
+            <span style={styles.statsAccentGray}>{stats.regions}</span>
+            <span style={styles.statsLabel}>regions</span>
+            <span style={styles.statsDot}>·</span>
+            <span style={styles.statsLabel}>last {archiveDays} days</span>
           </div>
         </div>
       </header>
 
-      {/* Card Grid — 3 columns fixed */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {view === "creator" ? (
-          creatorCards.length === 0 ? (
-            <div className="text-center text-gray-500 text-sm py-20">No alerts in the last {archiveDays} days</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {creatorCards.map(({ intel, signal }, idx) => (
-                <CreatorCard
-                  key={`${signal.signal_id}-${intel.region}-${idx}`}
-                  intel={intel}
-                  signal={signal}
-                  onClick={() => setSelectedCreator({ intel, signal })}
-                />
-              ))}
-            </div>
-          )
-        ) : builderCards.length === 0 ? (
-          <div className="text-center text-gray-500 text-sm py-20">No opportunities in the last {archiveDays} days</div>
+      {/* Card Grid — 3 columns, inline styles, guaranteed to work */}
+      <main style={styles.main}>
+        {isEmpty ? (
+          <div style={styles.emptyState}>
+            No {view === "creator" ? "alerts" : "opportunities"} in the last {archiveDays} days
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {builderCards.map((opp) => (
-              <BuilderCard
-                key={opp.opportunity_id}
-                opp={opp}
-                onClick={() => setSelectedBuilder(opp)}
-              />
-            ))}
+          <div style={styles.grid}>
+            {view === "creator"
+              ? creatorCards.map(({ intel, signal }, idx) => (
+                  <CreatorCard
+                    key={`${signal.signal_id}-${intel.region}-${idx}`}
+                    intel={intel}
+                    signal={signal}
+                    onClick={() => setSelectedCreator({ intel, signal })}
+                  />
+                ))
+              : builderCards.map((opp) => (
+                  <BuilderCard
+                    key={opp.opportunity_id}
+                    opp={opp}
+                    onClick={() => setSelectedBuilder(opp)}
+                  />
+                ))}
           </div>
         )}
       </main>
