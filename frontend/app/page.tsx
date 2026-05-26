@@ -71,6 +71,21 @@ interface MarketOpportunity {
   trend_direction: string;
 }
 
+// ─── Window Size Hook ───
+
+function useWindowSize() {
+  const [size, setSize] = useState({ width: 1200, height: 800 });
+  useEffect(() => {
+    function handleResize() {
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return size;
+}
+
 // ─── Constants ───
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://agent-dashboard-api-windblown-fog-6023.fly.dev";
@@ -144,8 +159,8 @@ function truncate(str: string, len: number): string {
 const styles: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", backgroundColor: "#f9fafb", color: "#111827", fontFamily: 'system-ui, -apple-system, sans-serif' },
   header: { borderBottom: "1px solid #e5e7eb", backgroundColor: "#ffffff" },
-  headerInner: { maxWidth: "1152px", margin: "0 auto", padding: "20px 16px" },
-  headerTop: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" },
+  headerInner: { maxWidth: "1152px", margin: "0 auto", padding: "16px 12px" },
+  headerTop: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" },
   title: { fontSize: "20px", fontWeight: 700, color: "#111827", letterSpacing: "-0.025em", margin: 0, lineHeight: 1.2 },
   subtitle: { fontSize: "12px", color: "#6b7280", marginTop: "4px", margin: 0 },
   toggleWrap: { display: "flex", alignItems: "center", gap: "2px", backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "2px" },
@@ -153,15 +168,15 @@ const styles: Record<string, React.CSSProperties> = {
   toggleBtnActiveCreator: { backgroundColor: "#ffffff", color: "#4338ca", border: "1px solid #c7d2fe", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" },
   toggleBtnActiveBuilder: { backgroundColor: "#ffffff", color: "#047857", border: "1px solid #a7f3d0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" },
   toggleBtnInactive: { backgroundColor: "transparent", color: "#6b7280" },
-  statsBar: { display: "flex", alignItems: "center", gap: "12px", fontSize: "12px" },
+  statsBar: { display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", flexWrap: "wrap", rowGap: "6px" },
   statsNum: { fontWeight: 600, color: "#111827" },
   statsLabel: { color: "#6b7280" },
   statsDot: { color: "#d1d5db" },
   statsAccentRed: { fontWeight: 500, color: "#dc2626" },
   statsAccentAmber: { fontWeight: 500, color: "#d97706" },
   statsAccentGray: { fontWeight: 500, color: "#374151" },
-  main: { maxWidth: "1152px", margin: "0 auto", padding: "24px 16px" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" },
+  main: { maxWidth: "1152px", margin: "0 auto", padding: "16px 12px" },
+  grid: { display: "grid", gap: "16px" }  // columns set dynamically in component,
   grid2col: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" },
   grid1col: { display: "grid", gridTemplateColumns: "1fr", gap: "16px" },
   emptyState: { textAlign: "center", color: "#6b7280", fontSize: "14px", padding: "80px 0" },
@@ -529,6 +544,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCreator, setSelectedCreator] = useState<{ intel: CreatorIntel; signal: AgentSignal } | null>(null);
   const [selectedBuilder, setSelectedBuilder] = useState<MarketOpportunity | null>(null);
+  const { width } = useWindowSize();
 
   useEffect(() => {
     async function fetchData() {
@@ -674,7 +690,11 @@ export default function HomePage() {
             No {view === "creator" ? "alerts" : "opportunities"} in the last {archiveDays} days
           </div>
         ) : (
-          <div style={styles.grid}>
+          <div style={{
+              display: "grid",
+              gap: "16px",
+              gridTemplateColumns: width < 640 ? "1fr" : width < 1024 ? "repeat(2, 1fr)" : "repeat(3, 1fr)"
+            }}>
             {view === "creator"
               ? creatorCards.map(({ intel, signal }, idx) => (
                   <CreatorCard
