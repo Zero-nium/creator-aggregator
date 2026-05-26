@@ -176,9 +176,8 @@ const styles: Record<string, React.CSSProperties> = {
   statsAccentAmber: { fontWeight: 500, color: "#d97706" },
   statsAccentGray: { fontWeight: 500, color: "#374151" },
   main: { maxWidth: "1152px", margin: "0 auto", padding: "16px 12px" },
-  grid: { display: "grid", gap: "16px" }  // columns set dynamically in component,
-  grid2col: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" },
-  grid1col: { display: "grid", gridTemplateColumns: "1fr", gap: "16px" },
+  grid: { display: "grid", gap: "16px" },
+
   emptyState: { textAlign: "center", color: "#6b7280", fontSize: "14px", padding: "80px 0" },
   loading: { minHeight: "100vh", backgroundColor: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", color: "#6b7280", fontSize: "14px" },
   error: { minHeight: "100vh", backgroundColor: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", fontSize: "14px" },
