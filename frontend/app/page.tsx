@@ -157,7 +157,7 @@ function truncate(str: string, len: number): string {
 // ─── Styles (inline to bypass Tailwind compilation issues) ───
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", backgroundColor: "#f9fafb", color: "#111827", fontFamily: 'system-ui, -apple-system, sans-serif' },
+  page: { minHeight: "100vh", backgroundColor: "#f9fafb", color: "#111827", fontFamily: 'system-ui, -apple-system, sans-serif', overflowX: "hidden" },
   header: { borderBottom: "1px solid #e5e7eb", backgroundColor: "#ffffff" },
   headerInner: { maxWidth: "1152px", margin: "0 auto", padding: "16px 12px" },
   headerTop: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" },
@@ -573,6 +573,7 @@ export default function HomePage() {
   const cutoffDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - archiveDays);
+    d.setHours(0, 0, 0, 0);
     return d;
   }, [archiveDays]);
 
@@ -580,6 +581,7 @@ export default function HomePage() {
     const cards: { intel: CreatorIntel; signal: AgentSignal; sortKey: number }[] = [];
     for (const signal of signals) {
       const signalDate = new Date(signal.date || signal.submitted_at || "1970-01-01");
+      signalDate.setHours(0, 0, 0, 0);
       if (signalDate < cutoffDate) continue;
       for (const intel of signal.creator_intelligence || []) {
         const daysLeft = daysUntil(intel.deadline) ?? 999;
@@ -597,6 +599,7 @@ export default function HomePage() {
     return opportunities
       .filter((opp) => {
         const d = new Date(opp.first_detected || "1970-01-01");
+        d.setHours(0, 0, 0, 0);
         return d >= cutoffDate;
       })
       .sort((a, b) => {
@@ -633,6 +636,23 @@ export default function HomePage() {
 
   return (
     <div style={styles.page}>
+      <style dangerouslySetInnerHTML={{__html: `
+        .creator-grid {
+          display: grid;
+          gap: 16px;
+        }
+        @media (max-width: 639px) {
+          .creator-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+          .creator-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (min-width: 1024px) {
+          .creator-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        }
+        .creator-page { overflow-x: hidden; }
+      `}} />
+
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
@@ -689,11 +709,7 @@ export default function HomePage() {
             No {view === "creator" ? "alerts" : "opportunities"} in the last {archiveDays} days
           </div>
         ) : (
-          <div style={{
-              display: "grid",
-              gap: "16px",
-              gridTemplateColumns: width < 640 ? "1fr" : width < 1024 ? "repeat(2, 1fr)" : "repeat(3, 1fr)"
-            }}>
+          <div className="creator-grid">
             {view === "creator"
               ? creatorCards.map(({ intel, signal }, idx) => (
                   <CreatorCard
