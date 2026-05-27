@@ -26,8 +26,10 @@ class CreatorIntelligence(BaseModel):
 class ConsolidationSignal(BaseModel):
     pattern: str
     regions_affected: List[str]
-    description: str
-    product_opportunity: str
+    description: str           # Problem: what regulatory/content gap exists
+    product_opportunity: str   # Opportunity: what product category addresses this
+    solution: Optional[str] = None           # NEW: How the product works
+    commercialisation: Optional[str] = None  # NEW: Revenue model, adoption path
     urgency: Literal["critical", "high", "medium", "low"]
     first_detected: str
     event_count: int
@@ -79,8 +81,10 @@ class MarketOpportunity(BaseModel):
     opportunity_id: str
     pattern_name: str
     regions_affected: List[str]
-    description: str
-    product_opportunity: str
+    description: str           # Problem
+    product_opportunity: str   # Opportunity
+    solution: Optional[str] = None           # NEW
+    commercialisation: Optional[str] = None  # NEW
     urgency: Literal["critical", "high", "medium", "low"]
     data_gaps: List[str]
     first_detected: str

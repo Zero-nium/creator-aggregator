@@ -63,8 +63,10 @@ interface MarketOpportunity {
   opportunity_id: string;
   pattern_name: string;
   regions_affected: string[];
-  description: string;
-  product_opportunity: string;
+  description: string;           // Problem
+  product_opportunity: string;   // Opportunity
+  solution?: string;              // Solution
+  commercialisation?: string;      // Commercialisation
   urgency: string;
   data_gaps: string[];
   first_detected: string;
