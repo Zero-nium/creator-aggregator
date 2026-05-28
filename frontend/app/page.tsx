@@ -114,6 +114,31 @@ const REGION_EMOJI: Record<string, string> = {
   France: "🇫🇷",
 };
 
+// Normalize region codes to full names for emoji lookup
+function normalizeRegion(region: string): string {
+  const map: Record<string, string> = {
+    JP: "Japan", JPN: "Japan",
+    ID: "Indonesia", IDN: "Indonesia",
+    KR: "South Korea", KOR: "South Korea",
+    IN: "India", IND: "India",
+    AU: "Australia", AUS: "Australia",
+    TH: "Thailand", THA: "Thailand",
+    PH: "Philippines", PHL: "Philippines",
+    MY: "Malaysia", MYS: "Malaysia",
+    SG: "Singapore", SGP: "Singapore",
+    VN: "Vietnam", VNM: "Vietnam",
+    CN: "China", CHN: "China",
+    TW: "Taiwan", TWN: "Taiwan",
+    HK: "Hong Kong", HKG: "Hong Kong",
+    US: "United States", USA: "United States",
+    UK: "United Kingdom", GBR: "United Kingdom",
+    BR: "Brazil", BRA: "Brazil",
+    DE: "Germany", DEU: "Germany",
+    FR: "France", FRA: "France",
+  };
+  return map[region.toUpperCase()] || region;
+}
+
 const SEVERITY_ORDER: Record<string, number> = {
   critical: 0, high: 1, medium: 2, low: 3, observational: 4,
 };
@@ -130,8 +155,11 @@ const TREND_ORDER: Record<string, number> = {
 
 function daysUntil(dateStr?: string): number | null {
   if (!dateStr) return null;
+  // Reject non-date strings like "Q2 2026", "Rolling", "TBD"
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return null;
   try {
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
     const now = new Date();
     const diff = d.getTime() - now.getTime();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -205,7 +233,8 @@ function Badge({ children, bg, text, border }: { children: React.ReactNode; bg: 
 function CreatorCard({ intel, signal, onClick }: { intel: CreatorIntel; signal: AgentSignal; onClick: () => void }) {
   const daysLeft = daysUntil(intel.deadline);
   const age = daysAgo(signal.date || signal.submitted_at);
-  const regionEmoji = REGION_EMOJI[intel.region] || "🌐";
+  const normalizedRegion = normalizeRegion(intel.region);
+  const regionEmoji = REGION_EMOJI[normalizedRegion] || "🌐";
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
 
   const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
@@ -270,7 +299,7 @@ function CreatorCard({ intel, signal, onClick }: { intel: CreatorIntel; signal: 
               {daysLeft}d
             </span>
           )}
-          <span>{intel.region}</span>
+          <span>{normalizedRegion}</span>
         </div>
         <span style={{ color: "#9ca3af" }}>{age}</span>
       </div>
@@ -334,7 +363,7 @@ function BuilderCard({ opp, onClick }: { opp: MarketOpportunity; onClick: () => 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "11px", color: "#6b7280" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <span>🌍</span>
-          <span>{opp.regions_affected.slice(0, 3).join(", ")}</span>
+          <span>{opp.regions_affected.slice(0, 3).map(normalizeRegion).join(", ")}</span>
           {opp.regions_affected.length > 3 && <span>+{opp.regions_affected.length - 3}</span>}
         </div>
         <span style={{ color: "#9ca3af" }}>{age}</span>
@@ -375,7 +404,8 @@ function Modal({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => 
 
 function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSignal }) {
   const daysLeft = daysUntil(intel.deadline);
-  const regionEmoji = REGION_EMOJI[intel.region] || "🌐";
+  const normalizedRegion = normalizeRegion(intel.region);
+  const regionEmoji = REGION_EMOJI[normalizedRegion] || "🌐";
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
 
   const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
@@ -512,7 +542,7 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {opp.regions_affected.map((r) => (
               <span key={r} style={{ padding: "2px 8px", backgroundColor: "#f3f4f6", color: "#4b5563", fontSize: "12px", borderRadius: "4px" }}>
-                {REGION_EMOJI[r] || "🌐"} {r}
+                {REGION_EMOJI[normalizeRegion(r)] || "🌐"} {normalizeRegion(r)}
               </span>
             ))}
           </div>
