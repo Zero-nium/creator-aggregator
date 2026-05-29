@@ -575,6 +575,13 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCreator, setSelectedCreator] = useState<{ intel: CreatorIntel; signal: AgentSignal } | null>(null);
   const [selectedBuilder, setSelectedBuilder] = useState<MarketOpportunity | null>(null);
+
+  // ─── Filter State ───
+  const [filterCohort, setFilterCohort] = useState<string | null>(null);
+  const [filterSeverity, setFilterSeverity] = useState<string | null>(null);
+  const [filterRegion, setFilterRegion] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
+
   const { width } = useWindowSize();
 
   useEffect(() => {
