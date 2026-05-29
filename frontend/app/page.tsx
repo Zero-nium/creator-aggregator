@@ -615,7 +615,18 @@ export default function HomePage() {
       const signalDate = new Date(signal.date || signal.submitted_at || "1970-01-01");
       signalDate.setHours(0, 0, 0, 0);
       if (signalDate < cutoffDate) continue;
+
+      // Cohort filter
+      if (filterCohort && signal.cohort !== filterCohort) continue;
+
       for (const intel of signal.creator_intelligence || []) {
+        // Severity filter
+        if (filterSeverity && intel.severity !== filterSeverity) continue;
+        // Region filter
+        if (filterRegion && normalizeRegion(intel.region) !== normalizeRegion(filterRegion)) continue;
+        // Signal type filter
+        if (filterType && intel.signal_type !== filterType) continue;
+
         const daysLeft = daysUntil(intel.deadline) ?? 999;
         const sev = SEVERITY_ORDER[intel.severity] ?? 99;
         const age = Math.floor((Date.now() - signalDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -625,14 +636,19 @@ export default function HomePage() {
     }
     cards.sort((a, b) => a.sortKey - b.sortKey);
     return cards;
-  }, [signals, cutoffDate]);
+  }, [signals, cutoffDate, filterCohort, filterSeverity, filterRegion, filterType]);
 
   const builderCards = useMemo(() => {
     return opportunities
       .filter((opp) => {
         const d = new Date(opp.first_detected || "1970-01-01");
         d.setHours(0, 0, 0, 0);
-        return d >= cutoffDate;
+        if (d < cutoffDate) return false;
+        // Urgency filter
+        if (filterSeverity && opp.urgency !== filterSeverity) return false;
+        // Trend filter
+        if (filterType && opp.trend_direction !== filterType) return false;
+        return true;
       })
       .sort((a, b) => {
         const trendA = TREND_ORDER[a.trend_direction] ?? 99;
@@ -641,21 +657,21 @@ export default function HomePage() {
         const urgB = URGENCY_ORDER[b.urgency] ?? 99;
         return trendA - trendB || urgA - urgB;
       });
-  }, [opportunities, cutoffDate]);
+  }, [opportunities, cutoffDate, filterSeverity, filterType]);
 
   const stats = useMemo(() => {
     if (view === "creator") {
       const total = creatorCards.length;
       const criticalHigh = creatorCards.filter((c) => c.intel.severity === "critical" || c.intel.severity === "high").length;
       const withDeadline = creatorCards.filter((c) => c.intel.deadline).length;
-      const regions = new Set(creatorCards.map((c) => c.intel.region)).size;
+      const regions = new Set(creatorCards.map((c) => normalizeRegion(c.intel.region))).size;
       return { total, criticalHigh, withDeadline, regions };
     } else {
       const total = builderCards.length;
       const highUrgency = builderCards.filter((o) => o.urgency === "critical" || o.urgency === "high").length;
       const strengthening = builderCards.filter((o) => o.trend_direction === "strengthening").length;
       const allRegions = new Set<string>();
-      builderCards.forEach((o) => o.regions_affected.forEach((r) => allRegions.add(r)));
+      builderCards.forEach((o) => o.regions_affected.forEach((r) => allRegions.add(normalizeRegion(r))));
       return { total, criticalHigh: highUrgency, withDeadline: strengthening, regions: allRegions.size };
     }
   }, [creatorCards, builderCards, view]);
@@ -695,7 +711,7 @@ export default function HomePage() {
             </div>
             <div style={styles.toggleWrap}>
               <button
-                onClick={() => setView("creator")}
+                onClick={() => { setView("creator"); setFilterCohort(null); setFilterSeverity(null); setFilterType(null); }}
                 style={{
                   ...styles.toggleBtn,
                   ...(view === "creator" ? styles.toggleBtnActiveCreator : styles.toggleBtnInactive),
@@ -704,7 +720,7 @@ export default function HomePage() {
                 Creator
               </button>
               <button
-                onClick={() => setView("builder")}
+                onClick={() => { setView("builder"); setFilterCohort(null); setFilterSeverity(null); setFilterType(null); }}
                 style={{
                   ...styles.toggleBtn,
                   ...(view === "builder" ? styles.toggleBtnActiveBuilder : styles.toggleBtnInactive),
