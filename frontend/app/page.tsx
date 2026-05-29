@@ -151,6 +151,24 @@ const TREND_ORDER: Record<string, number> = {
   strengthening: 0, stable: 1, weakening: 2,
 };
 
+const COHORTS = ["beauty", "health", "gaming"] as const;
+const SEVERITIES = ["critical", "high", "medium", "low", "observational"] as const;
+const SIGNAL_TYPES = [
+  "regulatory_enforcement",
+  "platform_policy",
+  "compliance_deadline",
+  "media_escalation",
+  "creator_sentiment",
+  "baseline",
+] as const;
+const TRENDS = ["strengthening", "stable", "weakening"] as const;
+
+const COHORT_COLORS: Record<string, string> = {
+  beauty: "#ec4899",
+  health: "#10b981",
+  gaming: "#8b5cf6",
+};
+
 // ─── Helpers ───
 
 function daysUntil(dateStr?: string): number | null {
@@ -225,6 +243,50 @@ function Badge({ children, bg, text, border }: { children: React.ReactNode; bg: 
     }}>
       {children}
     </span>
+  );
+}
+
+// ─── Filter Pill ───
+
+function FilterPill({
+  label,
+  active,
+  onClick,
+  color,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  color?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "4px 12px",
+        borderRadius: "9999px",
+        border: active ? "2px solid " + (color || "#111827") : "1px solid #d1d5db",
+        background: active ? (color || "#111827") : "#ffffff",
+        color: active ? "#ffffff" : "#374151",
+        fontSize: "12px",
+        fontWeight: 500,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: "all 0.15s ease",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          (e.target as HTMLButtonElement).style.background = "#f3f4f6";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          (e.target as HTMLButtonElement).style.background = "#ffffff";
+        }
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -683,6 +745,15 @@ export default function HomePage() {
     }
   }, [creatorCards, builderCards, view]);
 
+  const hasActiveFilters = filterCohort || filterSeverity || filterRegion || filterType;
+
+  function clearFilters() {
+    setFilterCohort(null);
+    setFilterSeverity(null);
+    setFilterRegion(null);
+    setFilterType(null);
+  }
+
   if (loading) return <div style={styles.loading}>Loading…</div>;
   if (error) return <div style={styles.error}>{error}</div>;
 
@@ -718,7 +789,7 @@ export default function HomePage() {
             </div>
             <div style={styles.toggleWrap}>
               <button
-                onClick={() => { setView("creator"); setFilterCohort(null); setFilterSeverity(null); setFilterType(null); }}
+                onClick={() => { setView("creator"); clearFilters(); }}
                 style={{
                   ...styles.toggleBtn,
                   ...(view === "creator" ? styles.toggleBtnActiveCreator : styles.toggleBtnInactive),
@@ -727,7 +798,7 @@ export default function HomePage() {
                 Creator
               </button>
               <button
-                onClick={() => { setView("builder"); setFilterCohort(null); setFilterSeverity(null); setFilterType(null); }}
+                onClick={() => { setView("builder"); clearFilters(); }}
                 style={{
                   ...styles.toggleBtn,
                   ...(view === "builder" ? styles.toggleBtnActiveBuilder : styles.toggleBtnInactive),
@@ -735,6 +806,96 @@ export default function HomePage() {
               >
                 Builder
               </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div style={{ marginTop: "16px", marginBottom: "4px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+              {view === "creator" ? (
+                <>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "2px" }}>Cohort</span>
+                  {COHORTS.map((c) => (
+                    <FilterPill
+                      key={c}
+                      label={c.charAt(0).toUpperCase() + c.slice(1)}
+                      active={filterCohort === c}
+                      onClick={() => setFilterCohort(filterCohort === c ? null : c)}
+                      color={COHORT_COLORS[c]}
+                    />
+                  ))}
+                  <span style={{ width: "1px", height: "18px", background: "#e5e7eb", margin: "0 4px" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "2px" }}>Severity</span>
+                  {SEVERITIES.map((s) => (
+                    <FilterPill
+                      key={s}
+                      label={s.charAt(0).toUpperCase() + s.slice(1)}
+                      active={filterSeverity === s}
+                      onClick={() => setFilterSeverity(filterSeverity === s ? null : s)}
+                    />
+                  ))}
+                  <span style={{ width: "1px", height: "18px", background: "#e5e7eb", margin: "0 4px" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "2px" }}>Type</span>
+                  {SIGNAL_TYPES.map((t) => (
+                    <FilterPill
+                      key={t}
+                      label={SIGNAL_TYPE_LABELS[t] || t}
+                      active={filterType === t}
+                      onClick={() => setFilterType(filterType === t ? null : t)}
+                    />
+                  ))}
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "2px" }}>Urgency</span>
+                  {(["critical", "high", "medium", "low"] as const).map((u) => (
+                    <FilterPill
+                      key={u}
+                      label={u.charAt(0).toUpperCase() + u.slice(1)}
+                      active={filterSeverity === u}
+                      onClick={() => setFilterSeverity(filterSeverity === u ? null : u)}
+                    />
+                  ))}
+                  <span style={{ width: "1px", height: "18px", background: "#e5e7eb", margin: "0 4px" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "2px" }}>Trend</span>
+                  {TRENDS.map((t) => (
+                    <FilterPill
+                      key={t}
+                      label={t.charAt(0).toUpperCase() + t.slice(1)}
+                      active={filterType === t}
+                      onClick={() => setFilterType(filterType === t ? null : t)}
+                    />
+                  ))}
+                </>
+              )}
+              {hasActiveFilters && (
+                <>
+                  <span style={{ width: "1px", height: "18px", background: "#e5e7eb", margin: "0 4px" }} />
+                  <button
+                    onClick={clearFilters}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "9999px",
+                      border: "1px solid #ef4444",
+                      background: "#ffffff",
+                      color: "#ef4444",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLButtonElement).style.background = "#fef2f2";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLButtonElement).style.background = "#ffffff";
+                    }}
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -761,7 +922,30 @@ export default function HomePage() {
       <main style={styles.main}>
         {isEmpty ? (
           <div style={styles.emptyState}>
-            No {view === "creator" ? "alerts" : "opportunities"} in the last {archiveDays} days
+            {hasActiveFilters ? (
+              <>
+                <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔍</div>
+                <div style={{ fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No results match your filters</div>
+                <div style={{ fontSize: "13px", color: "#9ca3af", marginBottom: "16px" }}>Try adjusting or clearing your filters to see more data.</div>
+                <button
+                  onClick={clearFilters}
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#374151",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Clear all filters
+                </button>
+              </>
+            ) : (
+              <>No {view === "creator" ? "alerts" : "opportunities"} in the last {archiveDays} days</>
+            )}
           </div>
         ) : (
           <div className="creator-grid">
