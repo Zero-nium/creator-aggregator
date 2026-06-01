@@ -165,6 +165,34 @@ const TREND_ORDER: Record<string, number> = {
   strengthening: 0, stable: 1, weakening: 2,
 };
 
+const COHORTS = ["beauty", "health", "gaming"] as const;
+const SEVERITIES = ["critical", "high", "medium", "low", "observational"] as const;
+const SIGNAL_TYPES = [
+  // Legacy
+  "regulatory_enforcement",
+  "platform_policy",
+  "compliance_deadline",
+  "media_escalation",
+  "creator_sentiment",
+  "baseline",
+  // New
+  "monetization_change",
+  "algorithm_shift",
+  "audience_trend",
+  "engagement_pattern",
+  "commercial_opportunity",
+  "content_zeitgeist",
+  "platform_feature",
+  "competitive_threat",
+] as const;
+const TRENDS = ["strengthening", "stable", "weakening"] as const;
+
+const COHORT_COLORS: Record<string, string> = {
+  beauty: "#ec4899",
+  health: "#10b981",
+  gaming: "#8b5cf6",
+};
+
 // ─── Helpers ───
 
 function daysUntil(dateStr?: string): number | null {
