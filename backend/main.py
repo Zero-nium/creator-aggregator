@@ -23,7 +23,7 @@ from models import (
 app = FastAPI(
     title="Creator Aggregator API",
     description="Ingest agent signals, serve creator alerts and market opportunities",
-    version="1.2.0"
+    version="1.3.0"
 )
 
 # CORS for Vercel frontend
@@ -75,6 +75,15 @@ def _check_rate_limit(swarm_id: str, max_per_hour: int = DEFAULT_MAX_PER_HOUR) -
 
 _SIGNAL_ID_RE = re.compile(r'^sig_\d{4}_\d{2}_\d{2}_[a-z]+_[a-z]+_\d{3}$')
 
+# Expanded valid signal types for new taxonomy
+_VALID_SIGNAL_TYPES = {
+    "regulatory_enforcement", "platform_policy", "compliance_deadline",
+    "media_escalation", "creator_sentiment", "baseline",
+    "monetization_change", "algorithm_shift", "audience_trend",
+    "engagement_pattern", "commercial_opportunity", "content_zeitgeist",
+    "platform_feature", "competitive_threat",
+}
+
 def _validate_signal(signal: AgentSignal) -> None:
     """Raise HTTPException(422) if signal fails soft content checks."""
 
@@ -110,6 +119,12 @@ def _validate_signal(signal: AgentSignal) -> None:
                 status_code=422,
                 detail=f"creator_intelligence[{idx}] must have at least one source"
             )
+        # 4b. validate signal_type is known
+        if intel.signal_type not in _VALID_SIGNAL_TYPES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"creator_intelligence[{idx}] has unknown signal_type: {intel.signal_type}"
+            )
 
     # 5. narrative length (catches low-effort / spam)
     if len(signal.narrative.strip()) < 50:
@@ -127,7 +142,7 @@ async def health_check():
     db.get_signal_count()
     return HealthResponse(
         status="ok",
-        version="1.2.0",
+        version="1.3.0",
         database="turso" if db._client else "sqlite-local",
         signal_count=db.get_signal_count(),
         last_ingestion=db.get_last_ingestion()
@@ -271,7 +286,7 @@ async def get_deadlines():
     return deadlines
 
 # ═══════════════════════════════════════════════════════════════
-# MARKET / BUILDER VIEWS
+# MARKET / BUILDER VIEWS — Graceful degradation: build_signals preferred, legacy fallback
 # ═══════════════════════════════════════════════════════════════
 
 @app.get("/api/v1/market/opportunities", response_model=List[MarketOpportunity])
@@ -282,41 +297,69 @@ async def get_opportunities():
 
     for sig in signals:
         market = sig.get("market_intelligence", {})
+
+        # --- NEW: build_signals (preferred) ---
+        for build in market.get("build_signals", []):
+            key = build.get("pattern_name", "")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            opportunities.append(MarketOpportunity(
+                opportunity_id=f"opp_{key.replace(' ', '_')}",
+                pattern_name=build.get("pattern_name", ""),
+                regions_affected=build.get("regions_affected", []),
+                description=build.get("description", ""),
+                product_opportunity=build.get("product_opportunity", ""),
+                solution=build.get("solution"),
+                commercialisation=build.get("commercialisation"),
+                urgency=build.get("urgency", "medium"),
+                data_gaps=[],
+                first_detected=build.get("first_detected", sig.get("date", "")),
+                trend_direction=build.get("trend_direction", "stable"),
+                solo_builder_score=build.get("solo_builder_score"),
+                stack_suggestion=build.get("stack_suggestion"),
+                validation_path=build.get("validation_path"),
+            ))
+
+        # --- LEGACY: consolidation_signals (backward compatibility) ---
         for consol in market.get("consolidation_signals", []):
             key = consol.get("pattern", "")
-            if key not in seen:
-                seen.add(key)
-                opportunities.append(MarketOpportunity(
-                    opportunity_id=f"opp_{key.replace(' ', '_')}",
-                    pattern_name=consol.get("pattern", ""),
-                    regions_affected=consol.get("regions_affected", []),
-                    description=consol.get("description", ""),
-                    product_opportunity=consol.get("product_opportunity", ""),
-                    solution=consol.get("solution"),
-                    commercialisation=consol.get("commercialisation"),
-                    urgency=consol.get("urgency", "medium"),
-                    data_gaps=[],
-                    first_detected=consol.get("first_detected", sig.get("date", "")),
-                    trend_direction=consol.get("trend_direction", "stable")
-                ))
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            opportunities.append(MarketOpportunity(
+                opportunity_id=f"opp_{key.replace(' ', '_')}",
+                pattern_name=consol.get("pattern", ""),
+                regions_affected=consol.get("regions_affected", []),
+                description=consol.get("description", ""),
+                product_opportunity=consol.get("product_opportunity", ""),
+                solution=consol.get("solution"),
+                commercialisation=consol.get("commercialisation"),
+                urgency=consol.get("urgency", "medium"),
+                data_gaps=[],
+                first_detected=consol.get("first_detected", sig.get("date", "")),
+                trend_direction=consol.get("trend_direction", "stable"),
+            ))
 
+        # --- LEGACY: arbitrage_signals (backward compatibility) ---
         for arb in market.get("arbitrage_signals", []):
             key = arb.get("opportunity", "")
-            if key not in seen:
-                seen.add(key)
-                opportunities.append(MarketOpportunity(
-                    opportunity_id=f"arb_{key.replace(' ', '_')[:30]}",
-                    pattern_name=arb.get("description", "")[:50],
-                    regions_affected=arb.get("regions_affected", []),
-                    description=arb.get("description", ""),
-                    product_opportunity=arb.get("opportunity", ""),
-                    solution=None,
-                    commercialisation=None,
-                    urgency="medium",
-                    data_gaps=[arb.get("data_gap")] if arb.get("data_gap") else [],
-                    first_detected=sig.get("date", ""),
-                    trend_direction="stable"
-                ))
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            opportunities.append(MarketOpportunity(
+                opportunity_id=f"arb_{key.replace(' ', '_')[:30]}",
+                pattern_name=arb.get("description", "")[:50],
+                regions_affected=arb.get("regions_affected", []),
+                description=arb.get("description", ""),
+                product_opportunity=arb.get("opportunity", ""),
+                solution=None,
+                commercialisation=None,
+                urgency="medium",
+                data_gaps=[arb.get("data_gap")] if arb.get("data_gap") else [],
+                first_detected=sig.get("date", ""),
+                trend_direction="stable",
+            ))
 
     return opportunities
 
@@ -327,8 +370,27 @@ async def get_patterns():
 
     for sig in signals:
         market = sig.get("market_intelligence", {})
+
+        # New build_signals
+        for build in market.get("build_signals", []):
+            pat = build.get("pattern_name", "")
+            if not pat:
+                continue
+            if pat not in patterns:
+                patterns[pat] = {
+                    "regions": set(),
+                    "signals": [],
+                    "first_detected": build.get("first_detected", sig.get("date", "")),
+                    "trend_direction": build.get("trend_direction", "stable")
+                }
+            patterns[pat]["regions"].update(build.get("regions_affected", []))
+            patterns[pat]["signals"].append(sig["signal_id"])
+
+        # Legacy consolidation_signals
         for consol in market.get("consolidation_signals", []):
             pat = consol.get("pattern", "")
+            if not pat:
+                continue
             if pat not in patterns:
                 patterns[pat] = {
                     "regions": set(),
@@ -362,6 +424,7 @@ async def get_stats():
     regions = set()
     cohorts = set()
     severities = {"critical": 0, "high": 0, "medium": 0, "low": 0, "observational": 0}
+    signal_types = defaultdict(int)
 
     for sig in signals:
         cohorts.add(sig.get("cohort", "unknown"))
@@ -369,12 +432,15 @@ async def get_stats():
             regions.add(intel.get("region", ""))
             sev = intel.get("severity", "low")
             severities[sev] = severities.get(sev, 0) + 1
+            st = intel.get("signal_type", "unknown")
+            signal_types[st] += 1
 
     return {
         "total_signals": len(signals),
         "regions_covered": len(regions),
         "cohorts": list(cohorts),
         "severity_distribution": severities,
+        "signal_type_distribution": dict(signal_types),
         "last_ingestion": db.get_last_ingestion()
     }
 
@@ -384,4 +450,4 @@ async def get_stats():
 
 @app.get("/")
 async def root():
-    return {"message": "Creator Aggregator API v1.2.0", "docs": "/docs"}
+    return {"message": "Creator Aggregator API v1.3.0", "docs": "/docs"}

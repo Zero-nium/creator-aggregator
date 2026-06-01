@@ -71,6 +71,10 @@ interface MarketOpportunity {
   data_gaps: string[];
   first_detected: string;
   trend_direction: string;
+  // New — agentic/solo-builder fields
+  solo_builder_score?: number;
+  stack_suggestion?: string[];
+  validation_path?: string;
 }
 
 // ─── Window Size Hook ───
@@ -93,12 +97,22 @@ function useWindowSize() {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://agent-dashboard-api-windblown-fog-6023.fly.dev";
 
 const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  // Legacy
   regulatory_enforcement: "REGULATION",
   platform_policy: "PLATFORM",
   compliance_deadline: "DEADLINE",
   media_escalation: "MEDIA",
   creator_sentiment: "SENTIMENT",
   baseline: "BASELINE",
+  // New — engagement & commercial
+  monetization_change: "MONETIZE",
+  algorithm_shift: "ALGORITHM",
+  audience_trend: "AUDIENCE",
+  engagement_pattern: "ENGAGEMENT",
+  commercial_opportunity: "COMMERCIAL",
+  content_zeitgeist: "ZEITGEIST",
+  platform_feature: "FEATURE",
+  competitive_threat: "THREAT",
 };
 
 const REGION_EMOJI: Record<string, string> = {
@@ -149,24 +163,6 @@ const URGENCY_ORDER: Record<string, number> = {
 
 const TREND_ORDER: Record<string, number> = {
   strengthening: 0, stable: 1, weakening: 2,
-};
-
-const COHORTS = ["beauty", "health", "gaming"] as const;
-const SEVERITIES = ["critical", "high", "medium", "low", "observational"] as const;
-const SIGNAL_TYPES = [
-  "regulatory_enforcement",
-  "platform_policy",
-  "compliance_deadline",
-  "media_escalation",
-  "creator_sentiment",
-  "baseline",
-] as const;
-const TRENDS = ["strengthening", "stable", "weakening"] as const;
-
-const COHORT_COLORS: Record<string, string> = {
-  beauty: "#ec4899",
-  health: "#10b981",
-  gaming: "#8b5cf6",
 };
 
 // ─── Helpers ───
@@ -300,12 +296,22 @@ function CreatorCard({ intel, signal, onClick }: { intel: CreatorIntel; signal: 
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
 
   const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
+    // Legacy
     regulatory_enforcement: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
     platform_policy: { bg: "#ede9fe", text: "#5b21b6", border: "#ddd6fe" },
     compliance_deadline: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
     media_escalation: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
     creator_sentiment: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
     baseline: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+    // New — engagement & commercial
+    monetization_change: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    algorithm_shift: { bg: "#e0e7ff", text: "#3730a3", border: "#c7d2fe" },
+    audience_trend: { bg: "#fce7f3", text: "#9d174d", border: "#fbcfe8" },
+    engagement_pattern: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    commercial_opportunity: { bg: "#dcfce7", text: "#15803d", border: "#bbf7d0" },
+    content_zeitgeist: { bg: "#fae8ff", text: "#86198f", border: "#f0abfc" },
+    platform_feature: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
+    competitive_threat: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
   };
 
   const sevStyles: Record<string, { bg: string; text: string; border: string }> = {
@@ -471,12 +477,22 @@ function CreatorModal({ intel, signal }: { intel: CreatorIntel; signal: AgentSig
   const typeLabel = SIGNAL_TYPE_LABELS[intel.signal_type] || intel.signal_type.toUpperCase();
 
   const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
+    // Legacy
     regulatory_enforcement: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
     platform_policy: { bg: "#ede9fe", text: "#5b21b6", border: "#ddd6fe" },
     compliance_deadline: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
     media_escalation: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
     creator_sentiment: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
     baseline: { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" },
+    // New — engagement & commercial
+    monetization_change: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+    algorithm_shift: { bg: "#e0e7ff", text: "#3730a3", border: "#c7d2fe" },
+    audience_trend: { bg: "#fce7f3", text: "#9d174d", border: "#fbcfe8" },
+    engagement_pattern: { bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
+    commercial_opportunity: { bg: "#dcfce7", text: "#15803d", border: "#bbf7d0" },
+    content_zeitgeist: { bg: "#fae8ff", text: "#86198f", border: "#f0abfc" },
+    platform_feature: { bg: "#e0f2fe", text: "#075985", border: "#bae6fd" },
+    competitive_threat: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
   };
 
   const sevStyles: Record<string, { bg: string; text: string; border: string }> = {
@@ -598,6 +614,60 @@ function BuilderModal({ opp }: { opp: MarketOpportunity }) {
           <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Product Opportunity</h4>
           <p style={{ color: "#111827" }}>{opp.product_opportunity}</p>
         </div>
+
+        {opp.solution && (
+          <div>
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Solution</h4>
+            <p>{opp.solution}</p>
+          </div>
+        )}
+
+        {opp.commercialisation && (
+          <div>
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Commercialisation</h4>
+            <p style={{ color: "#111827" }}>{opp.commercialisation}</p>
+          </div>
+        )}
+
+        {opp.solo_builder_score && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Solo Builder Score</h4>
+            <div style={{ display: "flex", gap: "2px" }}>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: "16px",
+                    height: "6px",
+                    borderRadius: "2px",
+                    background: i < opp.solo_builder_score ? "#10b981" : "#e5e7eb",
+                  }}
+                />
+              ))}
+            </div>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "#059669" }}>{opp.solo_builder_score}/10</span>
+          </div>
+        )}
+
+        {opp.stack_suggestion && opp.stack_suggestion.length > 0 && (
+          <div>
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Stack</h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {opp.stack_suggestion.map((s) => (
+                <span key={s} style={{ padding: "2px 8px", backgroundColor: "#e0e7ff", color: "#3730a3", fontSize: "12px", borderRadius: "4px", fontWeight: 500 }}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {opp.validation_path && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px" }}>
+            <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>🧪 Validation Path (48h)</h4>
+            <p style={{ fontSize: "13px", color: "#166534" }}>{opp.validation_path}</p>
+          </div>
+        )}
 
         <div>
           <h4 style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Regions Affected</h4>
